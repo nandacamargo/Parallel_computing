@@ -5,10 +5,11 @@ That's a project of Parallel Computing discipline
 --------------------------------------------------
 
 
---------------------------------------
-Group members:
+**Group members:**
 
 Fernanda de Camargo Magano
+
 Renan Fichberg
+
 Vitor Samora da Graça
---------------------------------------
+
