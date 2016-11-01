@@ -38,39 +38,47 @@ int main(int argc, char **argv) {
 
 	fclose(arq1);
 
+	// Calcular Rx, Ry, Bx e By quando ler a entrada \/
+	M2[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
+	M2[i][j].Bx = horizontal_component(M[i][j].B, M[i][j].G);
+	M2[i][j].Ry = vertical_component(M[i][j].R, M[i][j].G);
+	M2[i][j].By = vertical_component(M[i][j].B, M[i][j].G);
 
     /*IMPORTANTE: As bordas nunca se alteram.
 	* Precisa fazer verificar se não é borda*/
 	for (k = 0; k < nr_inter; k++) {
-		for (i in M) {
-			for (j in M) {
+		for (i in M2) {
+			for (j in M2) {
 
-				M[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
-				M[i][j].Bx = horizontal_component(M[i][j].B, M[i][j].G);
-				if (horR > 0) {
-					M[i][j+1].Rx += transfer(M[i][j+1].R, M[i][j].Rx);
-					M[i][j-1].Bx += transfer(M[i][j-1].B, M[i][j].Bx); /*Recebe no sentido oposto*/
+				M2[i][j].Rx += M[i][j].Rx; // <- Copiar a matriz M em M2 antes dos laços e tirar as linhas (1)
+				M2[i][j].Bx += M[i][j].Bx; // (1)
+				if (M[i][j].Rx > 0) {
+					M2[i][j+1].Rx += transfer(M[i][j+1].R, M[i][j].Rx);
+					M2[i][j-1].Bx += transfer(M[i][j-1].B, M[i][j].Bx); /*Recebe no sentido oposto*/
 				}
 				else { /*Recebe um valor positivo*/
-					M[i][j-1].Rx -= transfer(M[i][j-1].R, M[i][j].Rx);
-					M[i][j+1].Bx -= transfer(M[i][j+1].B, M[i][j].Bx); /*Recebe no sentido oposto*/
+					M2[i][j-1].Rx -= transfer(M[i][j-1].R, M[i][j].Rx);
+					M2[i][j+1].Bx -= transfer(M[i][j+1].B, M[i][j].Bx); /*Recebe no sentido oposto*/
 				}
 
-				M[i][j].Ry = vertical_component(M[i][j].R, M[i][j].G);
-				M[i][j].By = vertical_component(M[i][j].B, M[i][j].G);
-				if (verR > 0) {
-					M[i-1][j].Ry += transfer(M[i-1][j].R, M[i][j].Ry);
-					M[i+1][j].By += transfer(M[i+1][j].B, M[i][j].By);
+				M2[i][j].Ry += M[i][j].Ry; // (1)
+				M2[i][j].By += M[i][j].By; // (1)
+				if (M[i][j].Ry > 0) {
+					M2[i-1][j].Ry += transfer(M[i-1][j].R, M[i][j].Ry);
+					M2[i+1][j].By += transfer(M[i+1][j].B, M[i][j].By);
 				}
 
 				else { /*Recebe um valor positivo*/
-					M[i+1][j].Ry -= transfer(M[i+1][j].R, M[i][j].Ry);
-					M[i-1][j].By -= transfer(M[i-1][j].B, M[i][j].By);
+					M2[i+1][j].Ry -= transfer(M[i+1][j].R, M[i][j].Ry);
+					M2[i-1][j].By -= transfer(M[i-1][j].B, M[i][j].By);
 				}
 
-				/*Atualizar G*/
+				// Checar se os pixels vizinhos estouraram
+
 			}
 		}
+
+		/*Laço para atualizar G*/
 	}
 
 	/*Feito isso, checar se algum valor ultrapassou 1

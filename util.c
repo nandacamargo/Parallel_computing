@@ -20,7 +20,7 @@ float vertical_component(float comp, float angle) {
 }
 
 float transfer(float neighbor, float current){
-    return ((1 - neighbor) * current)) / 4;
+    return ((1 - neighbor) * current) / 4;
 
     /*Precisa entender o que é o C_d da fórmula*/
 }

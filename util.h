@@ -9,6 +9,8 @@ typedef struct {
   float Ry;
   float G;
   float B;
+  float Bx;
+  float By;
 } Pixel;
 
 float horizontal_component(float comp, float angle);
