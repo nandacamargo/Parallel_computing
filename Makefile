@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS=-W -Wall -ansi -pedantic -lm
+CFLAGS=-W -Wall -ansi -pedantic -lm -lpthread
 DEPS = util.h
 OBJ = util.o ep.o
 
