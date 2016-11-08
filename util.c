@@ -32,3 +32,20 @@ int isBorder(int i, int j) {
     else
         return FALSE;
 }
+
+void cp(Pixel **M, Pixel **M2, int lines, int columns) {
+
+	int i, j;
+	
+	for (i = 0; i < lines; i++) {
+		for (j = 0; j < columns; j++) {
+			M2[i][j].Rx = M[i][j].Rx;
+			M2[i][j].Ry = M[i][j].Ry;
+			M2[i][j].G = M[i][j].G;
+			M2[i][j].Bx = M[i][j].Bx; 
+			M2[i][j].By = M[i][j].By; 
+		}
+		
+	}
+
+}

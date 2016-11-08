@@ -17,5 +17,6 @@ float horizontal_component(float comp, float angle);
 float vertical_component(float comp, float angle);
 float transfer(float neighbor, float current);
 int isBorder(int i, int j);
+void cp(Pixel **M, Pixel **M2, int lines, int columns);
 
 #endif

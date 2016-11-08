@@ -21,17 +21,17 @@ void * do_job(void *stuff) {
 }
 
 
-
 int main(int argc, char **argv) {
 
 	FILE *arq1, *arq2;
 	char *infile, *outfile;
-	char aux[MAX_LINE];
+	char a[MAX_LINE];
 	int nr_inter, nr_proc, nr_threads;
 	int i, j, k, columns, lines, comp_max_val;
 	pthread_t *id;
+	float val;
 
-	Pixel M[NMAX][NMAX], M2[NMAX][NMAX]; /*Matriz de pixels*/
+	Pixel **M, **M2, **aux; /*Matriz de pixels*/
 
    	/*Usemode*/
    	if (argc < 5) {
@@ -56,10 +56,10 @@ int main(int argc, char **argv) {
 		/*Read the input file*/
 		fscanf(arq1,"%d %d\n", &columns, &lines);
 		fscanf(arq1,"%d\n", &comp_max_val);
-	    while (fscanf(arq1, "%s", aux) != EOF) {
-		    switch (aux[0]) {
+	    while (fscanf(arq1, "%s", a) != EOF) {
+		    switch (a[0]) {
 			    case '#':
-			        fgets(aux, MAX_LINE, arq1);
+			        fgets(a, MAX_LINE, arq1);
 			        break;
 			    /*Talvez precise tratar alguns casos específicos*/    
 			    default:
@@ -71,6 +71,12 @@ int main(int argc, char **argv) {
 
 	fclose(arq1);
 
+	M = malloc(lines * sizeof(*Pixel));
+	M2 = malloc(lines * sizeof(*Pixel));
+	for (j = 0; j < columns; j++) {
+		M = malloc(columns * sizeof(Pixel));
+		M2 = malloc(columns * sizeof(Pixel));
+	}
 
 	/* Calcular Rx, Ry, Bx e By quando ler a entrada \/*/
 	M2[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
@@ -86,30 +92,64 @@ int main(int argc, char **argv) {
     /*IMPORTANTE: As bordas nunca se alteram.
 	* Precisa fazer verificar se não é borda*/
 	for (k = 0; k < nr_inter; k++) {
-		for (i = 0; i < lines; i++) {
-			for (j = 0; j < columns; j++) {
 
-				M2[i][j].Rx += M[i][j].Rx; /* <- Copiar a matriz M em M2 antes dos laços e tirar as linhas (1)*/
-				M2[i][j].Bx += M[i][j].Bx; /* (1)*/
+		aux = M;
+		M = M2;
+		M2 = aux;
+		cp(M, M2, lines, columns);
+		
+		for (i = 1; i < lines - 1; i++) {  /*Por causa da borda*/
+			for (j = 1; j < columns - 1; j++) {
+
 				if (M[i][j].Rx > 0) {
-					M2[i][j+1].Rx += transfer(M[i][j+1].R, M[i][j].Rx);
-					M2[i][j-1].Bx += transfer(M[i][j-1].B, M[i][j].Bx); /*Recebe no sentido oposto*/
+					if (j != columns -1) {
+						val = transfer(M[i][j+1].R, M[i][j].Rx);
+						M2[i][j+1].Rx += val;
+						M2[i][j].Rx -= val;
+					}
+					if (j != 1) {
+						val = transfer(M[i][j-1].B, M[i][j].Bx);
+						M2[i][j-1].Bx += val; /*Recebe no sentido oposto*/
+						M2[i][j].Bx -= val;
+					}
 				}
 				else { /*Recebe um valor positivo*/
-					M2[i][j-1].Rx -= transfer(M[i][j-1].R, M[i][j].Rx);
-					M2[i][j+1].Bx -= transfer(M[i][j+1].B, M[i][j].Bx); /*Recebe no sentido oposto*/
+					if (j != 1) {
+						val = transfer(M[i][j-1].R, M[i][j].Rx);
+						M2[i][j-1].Rx -= val;
+						M2[i][j].Rx += val;
+					}
+					if (j != columns - 1) {
+						val = transfer(M[i][j+1].B, M[i][j].Bx);
+						M2[i][j+1].Bx -= val;  /*Recebe no sentido oposto*/
+						M2[i][j].Bx += val;
+					}
 				}
 
-				M2[i][j].Ry += M[i][j].Ry; /* (1)*/
-				M2[i][j].By += M[i][j].By; /* (1)*/
 				if (M[i][j].Ry > 0) {
-					M2[i-1][j].Ry += transfer(M[i-1][j].R, M[i][j].Ry);
-					M2[i+1][j].By += transfer(M[i+1][j].B, M[i][j].By);
+					if (i != 1) {
+						val = transfer(M[i-1][j].R, M[i][j].Ry);
+						M2[i-1][j].Ry += val;
+						M2[i][j].Ry -= val;
+					}
+					if (i != lines - 1) {
+						val = transfer(M[i+1][j].B, M[i][j].By);
+						M2[i+1][j].By += val;
+						M2[i][j].By -= val; 
+					}
 				}
 
 				else { /*Recebe um valor positivo*/
-					M2[i+1][j].Ry -= transfer(M[i+1][j].R, M[i][j].Ry);
-					M2[i-1][j].By -= transfer(M[i-1][j].B, M[i][j].By);
+					if (i != lines - 1) {
+						val = transfer(M[i+1][j].R, M[i][j].Ry);
+						M2[i+1][j].Ry -= val;
+						M2[i][j].Ry += val; 
+					}
+					if (i != 1) {
+						val = transfer(M[i-1][j].B, M[i][j].By);
+						M2[i-1][j].By -= val;
+						M2[i][j].By += val; 
+					}
 				}
 
 				/* Checar se os pixels vizinhos estouraram*/
@@ -118,6 +158,15 @@ int main(int argc, char **argv) {
 		}
 
 		/*Laço para atualizar G*/
+		for (i = 1; i < lines - 1; i++) {
+			for (j = 1; j < columns - 1; j++) {
+				M2[i][j].R = sqrt(M2[i][j].Rx * M2[i][j].Rx + M2[i][j].Ry * M2[i][j].Ry);
+				M2[i][j].B = sqrt(M2[i][j].Bx * M2[i][j].Bx + M2[i][j].By * M2[i][j].By);
+				M2[i][j].G += atan(M2[i][j].R, M2[i][j].B); /*Checar se o sentido está correto - trocar talvez para -=*/
+				if (M2[i][j].G > 2 * PI) /*Pensar em uma forma de tratar quando ele estourar para menos (valor de ângulo negativo)*/
+					M2[i][j].G -= 2 * PI;
+			}
+		}
 	}
 
 	/*Feito isso, checar se algum valor ultrapassou 1
