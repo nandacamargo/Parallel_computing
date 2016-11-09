@@ -1,201 +1,195 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <pthread.h>
-#include "util.h"
+#include <unistd.h>
 
-#define TRUE 1
-#define FALSE 0
-#define DEBUG 0
-#define NMAX 1000
-#define MAX_LINE 256
-#define PI 3.14159265359
+typedef struct cell {
+  /* Matrix cells */
+	int r;             /* Red component */
+	int g;             /* Green component */
+  int b;             /* Blue component */
+} Cell;
 
-long int  x;
-pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
+typedef struct thread {
+  /* Thread informarion */
+	int id;            /* Thread id */
+	int pixel_i;       /* actual pixel x axis component this thread is at */
+  int pixel_j;       /* actual pixel y axis component this thread is at */
+  int disturbances;  /* Number of already disturbed pixels by this thread */
+  int iteration;     /* number of iterations this thread performed.
+                        When all pixels are disturbed, it gains +1 iteration */
+  /* The following numbers delimitates the image pixels this thread will act on */
+  int vil;           /* vertical inferior limit */
+  int vsl;           /* vertical superior limit */
+  int hil;           /* horizontal inferior limit */
+  int hsl;           /* horizontal superior limit */
+} Thread;
 
-/*Colocar fururamente essa função no util*/
-void * do_job(void *stuff) {
-  	pthread_mutex_lock(&mut);
-	x++;
-	pthread_mutex_unlock(&mut);
+/* Constants */
+#define PI 3.14159
+
+/* Prototypes */
+void *disturb(void *);
+int read_image(char *);
+void assign_id(Thread *, int);
+int arguments_fine(int, char**);
+void use();
+
+/* Globals */
+int iterations;     /* All threads must perform this number of iterations */
+int image_width;    /* Image width */
+int image_height;   /* Image height */
+Cell** image;       /* Each matrix cell represents a pixel */
+
+int main (int argc, char** argv)
+{
+  int i, processors, lin;
+  pthread_t *threads;
+  Thread *argt;
+
+  /* Program params checkup */
+  if(!arguments_fine(argc, argv)) {
+    use(); return 1;
+  }
+
+  /* Assign program params to variables */
+  iterations = atoi(argv[3]);
+  if((processors = atoi(argv[4])) == 0)
+    /* Get number of available processors */
+    processors = sysconf(_SC_NPROCESSORS_ONLN);
+
+  /* Reads the input information and assign values to remaining globals */
+  if(!read_image(argv[1]))
+    return 1;
+
+  /* Allocate threads according to the number of available processors */
+  threads = malloc(processors * sizeof(*threads));
+  argt = malloc(processors * sizeof(*argt));
+
+  /* Assign identification number to the threads */
+  assign_id(argt, processors);
+
+  /* Create and execute threads */
+  for(i = 0; i < processors; i++) {
+		if(pthread_create(&threads[i], NULL, disturb, &argt[i])) {
+			printf("Error creating thread.");
+			abort();
+		}
+	}
+	for(i = 0; i < processors; i++) {
+		if(pthread_join(threads[i], NULL)) {
+			printf("Error joining thread.");
+			abort();
+		}
+	}
+
+  free(threads); threads = NULL;
+  free(argt); argt = NULL;
+  for(lin = 0; lin < image_width; lin++) {
+    free(image[lin]); image[lin] = NULL;
+  }
+  free(image); image = NULL;
+  return 0;
 }
 
+/* Parallel computing function */
+void *disturb(void *argt)
+{
+  Thread *thread = ((Thread*) argt);
 
-int main(int argc, char **argv) {
+  printf("Thread number %d\n", thread->id);
+  return NULL;
+}
 
-	FILE *arq1, *arq2;
-	char *infile, *outfile;
-	char a[MAX_LINE];
-	int nr_inter, nr_proc, nr_threads;
-	int i, j, k, columns, lines, comp_max_val;
-	pthread_t *id;
-	float val;
+/* Assign id to threads */
+void assign_id(Thread* argt, int processors)
+{
+  int i;
 
-	Pixel **M, **M2, **aux; /*Matriz de pixels*/
+  for(i = 0; i < processors; i++) argt[i].id = i;
+}
 
-   	/*Usemode*/
-   	if (argc < 5) {
-   		printf("Modo de usar:\n\tArg1: nome do arquivo de entrada;\n\tArg2: nome do arquivo de saída\n\t");
-		printf("Arg3: número de iterações;\n\tArg4: número de processadores.\n\t");
-   		exit(1);
-   	}
+/* Reads the input file */
+int read_image(char *input)
+{
+  char c;
+  FILE *fp;
 
-    infile = argv[1];
-	outfile = argv[2];
-	nr_inter = atoi(argv[3]);
-	nr_proc = atoi(argv[4]);
-    nr_threads = 2 * nr_proc; /*Considerando hyperthread*/
+  if((fp = fopen(input, "r")) == NULL) {
+    printf("Error: unable to find PPM format input. Check README.txt file for further information on what is expected.\n");
+    return 0;
+  }
+  else {
+    int lin = 0, col = 0;
 
-    id = malloc(nr_threads * sizeof(int));
+    /* P3 format */
+    fscanf(fp, "P3\n");
 
-	arq1 = fopen(infile, "r");
+    /*Comments*/
+    while((c = getc(fp)) == '#')
+      while((c = getc(fp)) != '\n') continue;
+    ungetc(c, fp);
 
-   	if (arq1 == NULL)
-	    printf("Erro, não foi possível abrir o arquivo\n");
-	else {
-		/*Read the input file*/
-		fscanf(arq1,"%d %d\n", &columns, &lines);
-		fscanf(arq1,"%d\n", &comp_max_val);
-	    while (fscanf(arq1, "%s", a) != EOF) {
-		    switch (a[0]) {
-			    case '#':
-			        fgets(a, MAX_LINE, arq1);
-			        break;
-			    /*Talvez precise tratar alguns casos específicos*/    
-			    default:
-			        fscanf(arq1, "%f %f %f", M[i][j].R, M[i][j].G, M[i][j].B);
-			        break;
-			    }
-		    }
-	}
+    /* Image width and height */
+    if(fscanf(fp, "%d %d\n", &image_width, &image_height) != 2) {
+       printf("Error: something has happened while reading image size.\n");
+       return 0;
+    }
 
-	fclose(arq1);
+    /* Allocates the image matrix */
+    image = malloc(image_width * sizeof(Cell*));
+    for(lin = 0; lin < image_width; lin++) image[lin] = malloc(image_height * sizeof(Cell));
 
-	M = malloc(lines * sizeof(*Pixel));
-	M2 = malloc(lines * sizeof(*Pixel));
-	for (j = 0; j < columns; j++) {
-		M = malloc(columns * sizeof(Pixel));
-		M2 = malloc(columns * sizeof(Pixel));
-	}
+    /* Components maximum value */
+    fscanf(fp, "255\n");
 
-	/* Calcular Rx, Ry, Bx e By quando ler a entrada \/*/
-	M2[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
-	M2[i][j].Bx = horizontal_component(M[i][j].B, M[i][j].G);
-	M2[i][j].Ry = vertical_component(M[i][j].R, M[i][j].G);
-	M2[i][j].By = vertical_component(M[i][j].B, M[i][j].G);
+    /* Image Pixels */
+    for(lin = 0; lin < image_width; lin++)
+      for(col = 0; col < image_height; col++)
+        fscanf(fp, "%d %d %d", &image[lin][col].r, &image[lin][col].g, &image[lin][col].b);
+  }
 
+  return 1;
+}
 
-	/*Create the threads and divide the work between them*/
-    for (i = 0; i < nr_threads; i++)   pthread_create(&id[i], NULL, do_job, NULL);
-    for (i = 0; i < nr_threads; i++)   pthread_join(id[i], NULL);
+/* Program arguments basic checkup */
+int arguments_fine(int argc, char** argv)
+{
+  int i; char c;
 
-    /*IMPORTANTE: As bordas nunca se alteram.
-	* Precisa fazer verificar se não é borda*/
-	for (k = 0; k < nr_inter; k++) {
+  if(argc > 5) {
+    printf("Error: too many arguments (%d/4).\n", argc);
+    return 0;
+  }
+  else if(argc < 5) {
+    printf("Error: too few arguments (%d/4).\n", argc);
+    return 0;
+  }
+  for(c = argv[3][i = 0]; c != '\0'; c = argv[3][++i])
+    if(c > '9' || c < '0') {
+      printf("Error: argument 3 must be an integer.\n");
+      return 0;
+    }
+  for(c = argv[4][i = 0]; c != '\0'; c = argv[4][++i])
+    if(c > '9' || c < '0') {
+      printf("Error: argument 4 must be an integer.\n");
+      return 0;
+    }
 
-		aux = M;
-		M = M2;
-		M2 = aux;
-		cp(M, M2, lines, columns);
-		
-		for (i = 1; i < lines - 1; i++) {  /*Por causa da borda*/
-			for (j = 1; j < columns - 1; j++) {
+  if(atoi(argv[3]) == 0) {
+    printf("Error: argument 3 must be > 0.\n");
+    return 0;
+  }
 
-				if (M[i][j].Rx > 0) {
-					if (j != columns -1) {
-						val = transfer(M[i][j+1].R, M[i][j].Rx);
-						M2[i][j+1].Rx += val;
-						M2[i][j].Rx -= val;
-					}
-					if (j != 1) {
-						val = transfer(M[i][j-1].B, M[i][j].Bx);
-						M2[i][j-1].Bx += val; /*Recebe no sentido oposto*/
-						M2[i][j].Bx -= val;
-					}
-				}
-				else { /*Recebe um valor positivo*/
-					if (j != 1) {
-						val = transfer(M[i][j-1].R, M[i][j].Rx);
-						M2[i][j-1].Rx -= val;
-						M2[i][j].Rx += val;
-					}
-					if (j != columns - 1) {
-						val = transfer(M[i][j+1].B, M[i][j].Bx);
-						M2[i][j+1].Bx -= val;  /*Recebe no sentido oposto*/
-						M2[i][j].Bx += val;
-					}
-				}
+  return 1;
+}
 
-				if (M[i][j].Ry > 0) {
-					if (i != 1) {
-						val = transfer(M[i-1][j].R, M[i][j].Ry);
-						M2[i-1][j].Ry += val;
-						M2[i][j].Ry -= val;
-					}
-					if (i != lines - 1) {
-						val = transfer(M[i+1][j].B, M[i][j].By);
-						M2[i+1][j].By += val;
-						M2[i][j].By -= val; 
-					}
-				}
-
-				else { /*Recebe um valor positivo*/
-					if (i != lines - 1) {
-						val = transfer(M[i+1][j].R, M[i][j].Ry);
-						M2[i+1][j].Ry -= val;
-						M2[i][j].Ry += val; 
-					}
-					if (i != 1) {
-						val = transfer(M[i-1][j].B, M[i][j].By);
-						M2[i-1][j].By -= val;
-						M2[i][j].By += val; 
-					}
-				}
-
-				/* Checar se os pixels vizinhos estouraram*/
-
-			}
-		}
-
-		/*Laço para atualizar G*/
-		for (i = 1; i < lines - 1; i++) {
-			for (j = 1; j < columns - 1; j++) {
-				M2[i][j].R = sqrt(M2[i][j].Rx * M2[i][j].Rx + M2[i][j].Ry * M2[i][j].Ry);
-				M2[i][j].B = sqrt(M2[i][j].Bx * M2[i][j].Bx + M2[i][j].By * M2[i][j].By);
-				M2[i][j].G += atan(M2[i][j].R, M2[i][j].B); /*Checar se o sentido está correto - trocar talvez para -=*/
-				if (M2[i][j].G > 2 * PI) /*Pensar em uma forma de tratar quando ele estourar para menos (valor de ângulo negativo)*/
-					M2[i][j].G -= 2 * PI;
-			}
-		}
-	}
-
-	/*Feito isso, checar se algum valor ultrapassou 1
-	*ou ficou negativo (embora acho que não dê para
-	*ficar negativo)*/
-
-
-	/*Escrever no arquivo de saída*/
-	arq2 = fopen(outfile, "w");
-
-   	if (arq2 == NULL)
-	    printf("Erro, não foi possível abrir o arquivo\n");
-	else {
-		/*Write matriz in outfile*/
-
-		/*sprintf(outfile, "%s.ppm", outfile);*/
-	    fprintf(arq2, "P3\n%d %d\n255\n", columns, lines);
-
-	    for (i = 0; i < lines; i++) {
-			for (j = 0; j < columns; j++) {
-				fprintf(arq2, "%c%c%c",
-				   (unsigned char)(255* M[i][j].R), (unsigned char)(255* M[i][j].G), (unsigned char)(255* M[i][j].B));
-			   }
-		}
-
-	    fprintf(stdout, "A imagem foi salva no arquivo: %s\n", outfile);
-	    fclose(arq2);
-
-	}
-
- 	return 0;
- }
+/* Use */
+void use()
+{
+  printf("\nUse:\n\t./ep [A1] [A2] [A3] [A4]\nwhere:\n");
+  printf("A1: Input file name.\n");
+  printf("A2: Output file name.\n");
+  printf("A3: Number of iterations to be done by the program.\n");
+  printf("A4: Number of processors. If 0, the program will use the number of processors as default value.\n");
+}
