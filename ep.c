@@ -43,6 +43,8 @@ typedef struct thread {
 
 /* Prototypes */
 void *disturb(void *);
+void update_green(int, int);
+void verify_pixel(int, int);
 void disturb_east(int, int, int);
 void disturb_west(int, int, int);
 void disturb_north(int, int, int);
@@ -124,7 +126,7 @@ void *disturb(void *argt)
 
   /* Provoke pixels disturbance */
   for(thread->iteration = 0; thread->iteration < iterations; thread->iteration++) {
-    for(thread->pixel_i = thread->vil; thread->pixel_i <= thread->vsl; thread->pixel_i++)
+    for(thread->pixel_i = thread->vil; thread->pixel_i <= thread->vsl; thread->pixel_i++) {
       for(thread->pixel_j = thread->hil; thread->pixel_j <= thread->hsl; thread->pixel_j++) {
         if(image[thread->pixel_i][thread->pixel_j].border) continue;
         disturb_east(thread->id, thread->pixel_i, thread->pixel_j);
@@ -132,11 +134,125 @@ void *disturb(void *argt)
         disturb_north(thread->id, thread->pixel_i, thread->pixel_j);
         disturb_south(thread->id, thread->pixel_i, thread->pixel_j);
       }
-    /*Implement pixels correction here*/
+    }
+    for(thread->pixel_i = thread->vil; thread->pixel_i <= thread->vsl; thread->pixel_i++) {
+      for(thread->pixel_j = thread->hil; thread->pixel_j <= thread->hsl; thread->pixel_j++) {
+        if(image[thread->pixel_i][thread->pixel_j].border) continue;
+        verify_pixel(thread->pixel_i, thread->pixel_j);
+        update_green(thread->pixel_i, thread->pixel_j);
+      }
+    }
   }
 
   return NULL;
 }
+
+/* Update the angle and the green component of each pixel */
+void update_green(int i, int j)
+{
+  float cxg = image[i][j].cxr + image[i][j].cxb;
+  float cyg = image[i][j].cyr + image[i][j].cyb;
+  float g = sqrt((cxg * cxg) + (cyg * cyg));
+  float theta = 2 * PI * g;
+
+  image[i][j].theta += theta;
+  image[i][j].g = theta / (2 * PI);
+}
+
+/* Pixel verification to guarantee values are in [0, 1]. Note that the value cant be lower than zero
+  because when we do the disturbances, we calculate x = sqrt((a^2) + (b^2)).*/
+void verify_pixel(int i, int j)
+{
+  if(image[i][j].r > 1) {
+    int share_enable = 0;
+    float remainder = image[i][j].r - 1;
+    float share = remainder / 4;
+
+    pthread_mutex_lock(&image[i + 1][j].lock);
+    if(image[i + 1][j].r + share <= 1 && !image[i + 1][j].border) share_enable++;
+    pthread_mutex_unlock(&image[i + 1][j].lock);
+
+    pthread_mutex_lock(&image[i - 1][j].lock);
+    if(image[i - 1][j].r + share <= 1 && !image[i - 1][j].border) share_enable++;
+    pthread_mutex_unlock(&image[i - 1][j].lock);
+
+    pthread_mutex_lock(&image[i][j + 1].lock);
+    if(image[i][j + 1].r + share <= 1 && !image[i][j + 1].border) share_enable++;
+    pthread_mutex_unlock(&image[i][j + 1].lock);
+
+    pthread_mutex_lock(&image[i][j - 1].lock);
+    if(image[i][j - 1].r + share <= 1 && !image[i - 1][j].border) share_enable++;
+    pthread_mutex_unlock(&image[i][j - 1].lock);
+
+    if(share_enable == 4) {
+      pthread_mutex_lock(&image[i][j].lock);
+      image[i][j].r -= remainder;
+      pthread_mutex_unlock(&image[i][j].lock);
+
+      pthread_mutex_lock(&image[i + 1][j].lock);
+      image[i + 1][j].r += share;
+      pthread_mutex_unlock(&image[i + 1][j].lock);
+
+      pthread_mutex_lock(&image[i - 1][j].lock);
+      image[i - 1][j].r += share;
+      pthread_mutex_unlock(&image[i - 1][j].lock);
+
+      pthread_mutex_lock(&image[i][j + 1].lock);
+      image[i][j + 1].r += share;
+      pthread_mutex_unlock(&image[i][j + 1].lock);
+
+      pthread_mutex_lock(&image[i][j - 1].lock);
+      image[i][j - 1].r += share;
+      pthread_mutex_unlock(&image[i][j - 1].lock);
+    }
+  }
+
+  if(image[i][j].b > 1) {
+    int share_enable = 0;
+    float remainder = image[i][j].b - 1;
+    float share = remainder / 4;
+
+    pthread_mutex_lock(&image[i + 1][j].lock);
+    if(image[i + 1][j].b + share <= 1 && !image[i + 1][j].border) share_enable++;
+    pthread_mutex_unlock(&image[i + 1][j].lock);
+
+    pthread_mutex_lock(&image[i - 1][j].lock);
+    if(image[i - 1][j].b + share <= 1 && !image[i - 1][j].border) share_enable++;
+    pthread_mutex_unlock(&image[i - 1][j].lock);
+
+    pthread_mutex_lock(&image[i][j + 1].lock);
+    if(image[i][j + 1].b + share <= 1 && !image[i][j + 1].border) share_enable++;
+    pthread_mutex_unlock(&image[i][j + 1].lock);
+
+    pthread_mutex_lock(&image[i][j - 1].lock);
+    if(image[i][j - 1].b + share <= 1 && !image[i - 1][j].border) share_enable++;
+    pthread_mutex_unlock(&image[i][j - 1].lock);
+
+    if(share_enable == 4) {
+      pthread_mutex_lock(&image[i][j].lock);
+      image[i][j].b -= remainder;
+      pthread_mutex_unlock(&image[i][j].lock);
+
+      pthread_mutex_lock(&image[i + 1][j].lock);
+      image[i + 1][j].b += share;
+      pthread_mutex_unlock(&image[i + 1][j].lock);
+
+      pthread_mutex_lock(&image[i - 1][j].lock);
+      image[i - 1][j].b += share;
+      pthread_mutex_unlock(&image[i - 1][j].lock);
+
+      pthread_mutex_lock(&image[i][j + 1].lock);
+      image[i][j + 1].b += share;
+      pthread_mutex_unlock(&image[i][j + 1].lock);
+
+      pthread_mutex_lock(&image[i][j - 1].lock);
+      image[i][j - 1].b += share;
+      pthread_mutex_unlock(&image[i][j - 1].lock);
+    }
+  }
+
+}
+
 
 /* Provokes disturbance on east neighbor pixel */
 void disturb_east(int thread_id, int i, int j)
