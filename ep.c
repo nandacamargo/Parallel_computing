@@ -6,18 +6,19 @@
 
 typedef struct cell {
   /* Matrix cells */
-	float r;           /* Red component */
-	float g;           /* Green component */
-  float b;           /* Blue component */
-  int border;        /* Is a border cell? */
+	float r;              /* Red component */
+	float g;              /* Green component */
+  float b;              /* Blue component */
+  int border;           /* Is a border cell? */
   /* Components */
-  float theta;       /* Angle determined by green component. theta = 2*PI*g */
-  float cxr;         /* Red horizontal component. cxr = r * Sin(theta) */
-  float cyr;         /* Red vertical component. cyr = r * Cos(theta) */
-  float cxb;         /* Blue horizontal component.
-                     cxb = b * Sin(theta) with opposite direction to cxr */
-  float cyb;         /* Blue vertical component.
-                     cyb = b * Cos(theta) with opposite direction to cyr */
+  float theta;          /* Angle determined by green component. theta = 2*PI*g */
+  float cxr;            /* Red horizontal component. cxr = r * Sin(theta) */
+  float cyr;            /* Red vertical component. cyr = r * Cos(theta) */
+  float cxb;            /* Blue horizontal component.
+                        cxb = b * Sin(theta) with opposite direction to cxr */
+  float cyb;            /* Blue vertical component.
+                        cyb = b * Cos(theta) with opposite direction to cyr */
+  pthread_mutex_t lock; /*Lock to guarantee mutual exclusion at the limit of the thread sectors*/
 } Cell;
 
 typedef struct thread {
@@ -54,9 +55,11 @@ int image_width;    /* Image width */
 int image_height;   /* Image height */
 Cell** image;       /* Each matrix cell represents a pixel */
 
+int teste = 0;
+
 int main (int argc, char** argv)
 {
-  int i, processors, lin;
+  int i, processors, lin, col;
   pthread_t *threads;
   Thread *argt;
 
@@ -96,8 +99,12 @@ int main (int argc, char** argv)
 		}
 	}
 
+  /* Handle disalocations */
   free(threads); threads = NULL;
   free(argt); argt = NULL;
+  for(lin = 0; lin < image_width; lin++)
+    for(col = 0; col < image_height; col++)
+      pthread_mutex_destroy(&image[lin][col].lock);
   for(lin = 0; lin < image_width; lin++) {
     free(image[lin]); image[lin] = NULL;
   }
@@ -110,7 +117,21 @@ void *disturb(void *argt)
 {
   Thread *thread = ((Thread*) argt);
 
+  /* Setup initial angle & color components */
   image_initial_setup(thread);
+
+  /* Provoke pixels disturbance */
+  for(thread->iteration = 0; thread->iteration < iterations; thread->iteration++)
+    for(thread->pixel_i = thread->vil; thread->pixel_i <= thread->vsl; thread->pixel_i++)
+      for(thread->pixel_j = thread->hil; thread->pixel_j <= thread->hsl; thread->pixel_j++) {
+        if(image[thread->pixel_i][thread->pixel_j].border) continue;
+        pthread_mutex_lock(&image[thread->pixel_i][thread->pixel_j].lock);
+        /*disturb_east. DONT DISTURB IF BORDER*/
+        /*disturb_west. DONT DISTURB IF BORDER*/
+        /*disturb_north. DONT DISTURB IF BORDER*/
+        /*disturb_south. DONT DISTURB IF BORDER*/
+        pthread_mutex_unlock(&image[thread->pixel_i][thread->pixel_j].lock);
+      }
 
   return NULL;
 }
@@ -139,7 +160,6 @@ void assign_attr(Thread* argt, int processors)
     remaining_pixels = image_width % processors;
     for(i = 0; i < processors; i++, remaining_pixels--) {
       argt[i].id = i;
-      argt[i].iteration = 0;
       if(i == 0) {
         argt[i].vil = 0;
         if(remaining_pixels > 0) argt[i].vsl = sector_side;
@@ -226,6 +246,11 @@ int read_image(char *input)
           image[lin][col].border = TRUE;
         else
           image[lin][col].border = FALSE;
+        if(pthread_mutex_init(&image[lin][col].lock, NULL) != 0) {
+          printf("Error: failed to initialize mutual exclusion device.\n");
+          return 0;
+      }
+
       }
   }
 
