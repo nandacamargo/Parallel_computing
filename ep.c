@@ -51,6 +51,7 @@ void disturb_north(int, int, int);
 void disturb_south(int, int, int);
 void image_initial_setup(Thread *);
 int read_image(char *);
+int write_image(char *);
 void assign_attr(Thread *, int);
 int arguments_fine(int, char**);
 void use();
@@ -63,7 +64,7 @@ Cell** image;       /* Each matrix cell represents a pixel */
 
 int main (int argc, char** argv)
 {
-  int i, processors, lin, col;
+  int i, processors, lin;
   pthread_t *threads;
   Thread *argt;
 
@@ -103,12 +104,13 @@ int main (int argc, char** argv)
 		}
 	}
 
+  /* Write output */
+  if(!write_image(argv[2]))
+    return 1;
+
   /* Handle disalocations */
   free(threads); threads = NULL;
   free(argt); argt = NULL;
-  for(lin = 0; lin < image_width; lin++)
-    for(col = 0; col < image_height; col++)
-      pthread_mutex_destroy(&image[lin][col].lock);
   for(lin = 0; lin < image_width; lin++) {
     free(image[lin]); image[lin] = NULL;
   }
@@ -446,7 +448,6 @@ void assign_attr(Thread* argt, int processors)
   }
 }
 
-
 /* Reads the input file */
 int read_image(char *input)
 {
@@ -495,11 +496,59 @@ int read_image(char *input)
         if(pthread_mutex_init(&image[lin][col].lock, NULL) != 0) {
           printf("Error: failed to initialize mutual exclusion device.\n");
           return 0;
-      }
-
+        }
       }
   }
 
+  fclose(fp);
+  return 1;
+}
+
+/* Write output file */
+int write_image(char *output)
+{
+  FILE *fp;
+
+  if((fp = fopen(output, "w")) == NULL) {
+    printf("Error: unable to open output file.\n");
+    return 0;
+  }
+  else {
+    int lin = 0, col = 0;
+
+    /* P3 format */
+    if(fputs("P3\n", fp) == EOF) {
+      printf("Error: unable to write P3 format to output file.\n");
+      return 0;
+    }
+
+    /*Comments*/
+    if(fputs("# Add a commentary here for your image! :)\n", fp) == EOF) {
+      printf("Error: unable to write commentary to output file.\n");
+      return 0;
+    }
+
+    /* Image width and height */
+    if(fprintf(fp, "%d %d\n", image_width, image_height) < 0) {
+       printf("Error: something has happened while writing image size.\n");
+       return 0;
+    }
+
+    /* Components maximum value */
+    if(fputs("255\n", fp) == EOF) {
+      printf("Error: unable to write maximum value of components to output file.\n");
+      return 0;
+    }
+
+    /* Image Pixels */
+    for(lin = 0; lin < image_width; lin++)
+      for(col = 0; col < image_height; col++) {
+        fprintf(fp, "%d %d %d\n", (int)(image[lin][col].r * RGB_RANGE), (int)(image[lin][col].g * RGB_RANGE), (int)(image[lin][col].b * RGB_RANGE));
+        pthread_mutex_destroy(&image[lin][col].lock);
+      }
+  }
+
+  fclose(fp);
   return 1;
 }
 
