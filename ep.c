@@ -43,6 +43,10 @@ typedef struct thread {
 
 /* Prototypes */
 void *disturb(void *);
+void disturb_east(int, int, int);
+void disturb_west(int, int, int);
+void disturb_north(int, int, int);
+void disturb_south(int, int, int);
 void image_initial_setup(Thread *);
 int read_image(char *);
 void assign_attr(Thread *, int);
@@ -54,8 +58,6 @@ int iterations;     /* All threads must perform this number of iterations */
 int image_width;    /* Image width */
 int image_height;   /* Image height */
 Cell** image;       /* Each matrix cell represents a pixel */
-
-int teste = 0;
 
 int main (int argc, char** argv)
 {
@@ -121,19 +123,147 @@ void *disturb(void *argt)
   image_initial_setup(thread);
 
   /* Provoke pixels disturbance */
-  for(thread->iteration = 0; thread->iteration < iterations; thread->iteration++)
+  for(thread->iteration = 0; thread->iteration < iterations; thread->iteration++) {
     for(thread->pixel_i = thread->vil; thread->pixel_i <= thread->vsl; thread->pixel_i++)
       for(thread->pixel_j = thread->hil; thread->pixel_j <= thread->hsl; thread->pixel_j++) {
         if(image[thread->pixel_i][thread->pixel_j].border) continue;
-        pthread_mutex_lock(&image[thread->pixel_i][thread->pixel_j].lock);
-        /*disturb_east. DONT DISTURB IF BORDER*/
-        /*disturb_west. DONT DISTURB IF BORDER*/
-        /*disturb_north. DONT DISTURB IF BORDER*/
-        /*disturb_south. DONT DISTURB IF BORDER*/
-        pthread_mutex_unlock(&image[thread->pixel_i][thread->pixel_j].lock);
+        disturb_east(thread->id, thread->pixel_i, thread->pixel_j);
+        disturb_west(thread->id, thread->pixel_i, thread->pixel_j);
+        disturb_north(thread->id, thread->pixel_i, thread->pixel_j);
+        disturb_south(thread->id, thread->pixel_i, thread->pixel_j);
       }
+    /*Implement pixels correction here*/
+  }
 
   return NULL;
+}
+
+/* Provokes disturbance on east neighbor pixel */
+void disturb_east(int thread_id, int i, int j)
+{
+  if(thread_id % 2 == 0) {
+    pthread_mutex_lock(&image[i][j].lock);
+    pthread_mutex_lock(&image[i + 1][j].lock);
+  }
+  else {
+    pthread_mutex_lock(&image[i + 1][j].lock);
+    pthread_mutex_lock(&image[i][j].lock);
+  }
+
+  if(image[i][j].cxr > 0 && !image[i + 1][j].border) {
+    float transf = ((1 - image[i + 1][j].r) * image[i][j].cxr) / 4;
+    image[i][j].cxr -= transf;
+    image[i + 1][j].cxr += transf;
+    image[i][j].r = sqrt((image[i][j].cxr * image[i][j].cxr) + (image[i][j].cyr * image[i][j].cyr));
+    image[i + 1][j].r = sqrt((image[i + 1][j].cxr * image[i + 1][j].cxr) + (image[i + 1][j].cyr * image[i + 1][j].cyr));
+  }
+
+  if(image[i][j].cxb > 0 && !image[i + 1][j].border) {
+    float transf = ((1 - image[i + 1][j].b) * image[i][j].cxb) / 4;
+    image[i][j].cxb -= transf;
+    image[i + 1][j].cxb += transf;
+    image[i][j].b = sqrt((image[i][j].cxb * image[i][j].cxb) + (image[i][j].cyb * image[i][j].cyb));
+    image[i + 1][j].b = sqrt((image[i + 1][j].cxb * image[i + 1][j].cxb) + (image[i + 1][j].cyb * image[i + 1][j].cyb));
+  }
+
+  pthread_mutex_unlock(&image[i][j].lock);
+  pthread_mutex_unlock(&image[i + 1][j].lock);
+}
+
+/* Provokes disturbance on west neighbor pixel */
+void disturb_west(int thread_id, int i, int j)
+{
+  if(thread_id % 2 == 0) {
+    pthread_mutex_lock(&image[i][j].lock);
+    pthread_mutex_lock(&image[i - 1][j].lock);
+  }
+  else {
+    pthread_mutex_lock(&image[i - 1][j].lock);
+    pthread_mutex_lock(&image[i][j].lock);
+  }
+
+  if(image[i][j].cxr < 0 && !image[i - 1][j].border) {
+    float transf = ((1 - image[i - 1][j].r) * image[i][j].cxr) / 4;
+    image[i][j].cxr += transf;
+    image[i - 1][j].cxr -= transf;
+    image[i][j].r = sqrt((image[i][j].cxr * image[i][j].cxr) + (image[i][j].cyr * image[i][j].cyr));
+    image[i - 1][j].r = sqrt((image[i - 1][j].cxr * image[i - 1][j].cxr) + (image[i - 1][j].cyr * image[i - 1][j].cyr));
+  }
+
+  if(image[i][j].cxb < 0 && !image[i - 1][j].border) {
+    float transf = ((1 - image[i - 1][j].b) * image[i][j].cxb) / 4;
+    image[i][j].cxb += transf;
+    image[i - 1][j].cxb -= transf;
+    image[i][j].b = sqrt((image[i][j].cxb * image[i][j].cxb) + (image[i][j].cyb * image[i][j].cyb));
+    image[i - 1][j].b = sqrt((image[i - 1][j].cxb * image[i - 1][j].cxb) + (image[i - 1][j].cyb * image[i - 1][j].cyb));
+  }
+
+  pthread_mutex_unlock(&image[i][j].lock);
+  pthread_mutex_unlock(&image[i - 1][j].lock);
+}
+
+/* Provokes disturbance on north neighbor pixel */
+void disturb_north(int thread_id, int i, int j)
+{
+  if(thread_id % 2 == 0) {
+    pthread_mutex_lock(&image[i][j].lock);
+    pthread_mutex_lock(&image[i][j + 1].lock);
+  }
+  else {
+    pthread_mutex_lock(&image[i][j + 1].lock);
+    pthread_mutex_lock(&image[i][j].lock);
+  }
+
+  if(image[i][j].cyr > 0 && !image[i][j + 1].border) {
+    float transf = ((1 - image[i][j + 1].r) * image[i][j].cyr) / 4;
+    image[i][j].cyr -= transf;
+    image[i][j + 1].cyr += transf;
+    image[i][j].r = sqrt((image[i][j].cxr * image[i][j].cxr) + (image[i][j].cyr * image[i][j].cyr));
+    image[i][j + 1].r = sqrt((image[i][j + 1].cxr * image[i][j + 1].cxr) + (image[i][j + 1].cyr * image[i][j + 1].cyr));
+  }
+
+  if(image[i][j].cyb > 0 && !image[i][j + 1].border) {
+    float transf = ((1 - image[i][j + 1].b) * image[i][j].cyb) / 4;
+    image[i][j].cyb -= transf;
+    image[i][j + 1].cyb += transf;
+    image[i][j].b = sqrt((image[i][j].cxb * image[i][j].cxb) + (image[i][j].cyb * image[i][j].cyb));
+    image[i][j + 1].b = sqrt((image[i][j + 1].cxb * image[i][j + 1].cxb) + (image[i][j + 1].cyb * image[i][j + 1].cyb));
+  }
+
+  pthread_mutex_unlock(&image[i][j].lock);
+  pthread_mutex_unlock(&image[i][j + 1].lock);
+}
+
+/* Provokes disturbance on south neighbor pixel */
+void disturb_south(int thread_id, int i, int j)
+{
+  if(thread_id % 2 == 0) {
+    pthread_mutex_lock(&image[i][j].lock);
+    pthread_mutex_lock(&image[i][j - 1].lock);
+  }
+  else {
+    pthread_mutex_lock(&image[i][j - 1].lock);
+    pthread_mutex_lock(&image[i][j].lock);
+  }
+
+  if(image[i][j].cyr < 0 && !image[i][j - 1].border) {
+    float transf = ((1 - image[i][j - 1].r) * image[i][j].cyr) / 4;
+    image[i][j].cyr += transf;
+    image[i][j - 1].cyr -= transf;
+    image[i][j].r = sqrt((image[i][j].cxr * image[i][j].cxr) + (image[i][j].cyr * image[i][j].cyr));
+    image[i][j - 1].r = sqrt((image[i][j - 1].cxr * image[i][j - 1].cxr) + (image[i][j - 1].cyr * image[i][j - 1].cyr));
+  }
+
+  if(image[i][j].cyb < 0 && !image[i][j - 1].border) {
+    float transf = ((1 - image[i][j - 1].b) * image[i][j].cyb) / 4;
+    image[i][j].cyb += transf;
+    image[i][j - 1].cyb -= transf;
+    image[i][j].b = sqrt((image[i][j].cxb * image[i][j].cxb) + (image[i][j].cyb * image[i][j].cyb));
+    image[i][j - 1].b = sqrt((image[i][j - 1].cxb * image[i][j - 1].cxb) + (image[i][j - 1].cyb * image[i][j - 1].cyb));
+  }
+
+  pthread_mutex_unlock(&image[i][j].lock);
+  pthread_mutex_unlock(&image[i][j - 1].lock);
 }
 
 /* Setup initial configuration of angles and components of each pixel */
