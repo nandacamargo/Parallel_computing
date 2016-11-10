@@ -2,22 +2,31 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <math.h>
 
 typedef struct cell {
   /* Matrix cells */
-	int r;             /* Red component */
-	int g;             /* Green component */
-  int b;             /* Blue component */
+	float r;           /* Red component */
+	float g;           /* Green component */
+  float b;           /* Blue component */
+  int border;        /* Is a border cell? */
+  /* Components */
+  float theta;       /* Angle determined by green component. theta = 2*PI*g */
+  float cxr;         /* Red horizontal component. cxr = r * Sin(theta) */
+  float cyr;         /* Red vertical component. cyr = r * Cos(theta) */
+  float cxb;         /* Blue horizontal component.
+                     cxb = b * Sin(theta) with opposite direction to cxr */
+  float cyb;         /* Blue vertical component.
+                     cyb = b * Cos(theta) with opposite direction to cyr */
 } Cell;
 
 typedef struct thread {
-  /* Thread informarion */
+  /* Thread informartion */
 	int id;            /* Thread id */
 	int pixel_i;       /* actual pixel x axis component this thread is at */
   int pixel_j;       /* actual pixel y axis component this thread is at */
-  int disturbances;  /* Number of already disturbed pixels by this thread */
   int iteration;     /* number of iterations this thread performed.
-                        When all pixels are disturbed, it gains +1 iteration */
+                        When reach hsl and vil together, it gains +1 iteration */
   /* The following numbers delimitates the image pixels this thread will act on */
   int vil;           /* vertical inferior limit */
   int vsl;           /* vertical superior limit */
@@ -26,12 +35,16 @@ typedef struct thread {
 } Thread;
 
 /* Constants */
-#define PI 3.14159
+#define PI        3.14159
+#define TRUE      1
+#define FALSE     0
+#define RGB_RANGE 256
 
 /* Prototypes */
 void *disturb(void *);
+void image_initial_setup(Thread *);
 int read_image(char *);
-void assign_id(Thread *, int);
+void assign_attr(Thread *, int);
 int arguments_fine(int, char**);
 void use();
 
@@ -66,8 +79,8 @@ int main (int argc, char** argv)
   threads = malloc(processors * sizeof(*threads));
   argt = malloc(processors * sizeof(*argt));
 
-  /* Assign identification number to the threads */
-  assign_id(argt, processors);
+  /* Assign identification number to the threads and sector limits */
+  assign_attr(argt, processors);
 
   /* Create and execute threads */
   for(i = 0; i < processors; i++) {
@@ -97,17 +110,76 @@ void *disturb(void *argt)
 {
   Thread *thread = ((Thread*) argt);
 
-  printf("Thread number %d\n", thread->id);
+  image_initial_setup(thread);
+
   return NULL;
 }
 
-/* Assign id to threads */
-void assign_id(Thread* argt, int processors)
+/* Setup initial configuration of angles and components of each pixel */
+void image_initial_setup(Thread *thread)
 {
-  int i;
-
-  for(i = 0; i < processors; i++) argt[i].id = i;
+  for(thread->pixel_i = thread->vil; thread->pixel_i <= thread->vsl; thread->pixel_i++)
+    for(thread->pixel_j = thread->hil; thread->pixel_j <= thread->hsl; thread->pixel_j++) {
+      if(image[thread->pixel_i][thread->pixel_j].border) continue;
+      image[thread->pixel_i][thread->pixel_j].theta = 2 * PI * image[thread->pixel_i][thread->pixel_j].g;
+      image[thread->pixel_i][thread->pixel_j].cxr = image[thread->pixel_i][thread->pixel_j].r * sin(image[thread->pixel_i][thread->pixel_j].theta);
+      image[thread->pixel_i][thread->pixel_j].cyr = image[thread->pixel_i][thread->pixel_j].r * cos(image[thread->pixel_i][thread->pixel_j].theta);
+      image[thread->pixel_i][thread->pixel_j].cxb = (-1) * image[thread->pixel_i][thread->pixel_j].b * sin(image[thread->pixel_i][thread->pixel_j].theta);
+      image[thread->pixel_i][thread->pixel_j].cyb = (-1) * image[thread->pixel_i][thread->pixel_j].b * cos(image[thread->pixel_i][thread->pixel_j].theta);
+    }
 }
+
+/* Assign attributes to threads */
+void assign_attr(Thread* argt, int processors)
+{
+  int sector_side, remaining_pixels, i;
+
+  if(image_width >= image_height) {
+    sector_side = image_width / processors;
+    remaining_pixels = image_width % processors;
+    for(i = 0; i < processors; i++, remaining_pixels--) {
+      argt[i].id = i;
+      argt[i].iteration = 0;
+      if(i == 0) {
+        argt[i].vil = 0;
+        if(remaining_pixels > 0) argt[i].vsl = sector_side;
+        else argt[i].vsl = sector_side - 1;
+        argt[i].hil = 0;
+        argt[i].hsl = image_height - 1;
+      }
+      else {
+        argt[i].vil = argt[i - 1].vsl + 1;
+        if(remaining_pixels > 0) argt[i].vsl = argt[i].vil + sector_side;
+        else argt[i].vsl = argt[i].vil + sector_side - 1;
+        argt[i].hil = 0;
+        argt[i].hsl = image_height - 1;
+      }
+    }
+  }
+  else {
+    sector_side = image_height / processors;
+    remaining_pixels = image_height % processors;
+    for(i = 0; i < processors; i++, remaining_pixels--) {
+      argt[i].id = i;
+      argt[i].iteration = 0;
+      if(i == 0) {
+        argt[i].hil = 0;
+        if(remaining_pixels > 0) argt[i].hsl = sector_side;
+        else argt[i].hsl = sector_side - 1;
+        argt[i].vil = 0;
+        argt[i].vsl = image_width - 1;
+      }
+      else {
+        argt[i].hil = argt[i - 1].hsl + 1;
+        if(remaining_pixels > 0) argt[i].hsl = argt[i].hil + sector_side;
+        else argt[i].hsl = argt[i].hil + sector_side - 1;
+        argt[i].vil = 0;
+        argt[i].vsl = image_width - 1;
+      }
+    }
+  }
+}
+
 
 /* Reads the input file */
 int read_image(char *input)
@@ -145,8 +217,16 @@ int read_image(char *input)
 
     /* Image Pixels */
     for(lin = 0; lin < image_width; lin++)
-      for(col = 0; col < image_height; col++)
-        fscanf(fp, "%d %d %d", &image[lin][col].r, &image[lin][col].g, &image[lin][col].b);
+      for(col = 0; col < image_height; col++) {
+        fscanf(fp, "%f %f %f", &image[lin][col].r, &image[lin][col].g, &image[lin][col].b);
+        image[lin][col].r = image[lin][col].r / RGB_RANGE;
+        image[lin][col].g = image[lin][col].g / RGB_RANGE;
+        image[lin][col].b = image[lin][col].b / RGB_RANGE;
+        if(lin == 0 || lin == image_width - 1 || col == 0 || col == image_height - 1)
+          image[lin][col].border = TRUE;
+        else
+          image[lin][col].border = FALSE;
+      }
   }
 
   return 1;
