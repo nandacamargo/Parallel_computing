@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 #include <math.h>
 #include "util.h"
 
 #define TRUE 1
 #define FALSE 0
-#define DEBUG 0
+#define DEBUG 1
 #define NMAX 1000
 #define MAX_LINE 256
 #define PI 3.14159265359
@@ -30,9 +31,9 @@ int main(int argc, char **argv) {
 	char *infile, *outfile;
 	char a[MAX_LINE];
 	int nr_inter, nr_proc, nr_threads;
-	int i, j, k, columns, lines, comp_max_val;
+	int i, j, k, cont, columns, lines, comp_max_val;
 	pthread_t *id;
-	float val;
+	float val, distribute;
     Pixel **M, **M2, **aux; /*Matriz de pixels*/
 
     i = j = k = 0;
@@ -57,31 +58,43 @@ int main(int argc, char **argv) {
 	    printf("Erro, não foi possível abrir o arquivo\n");
 	else {
 		/*Read the input file*/
-		fscanf(arq1,"%d %d\n", &columns, &lines);
-		fscanf(arq1,"%d\n", &comp_max_val);
 
-        M = malloc(lines * sizeof(Pixel*));
-    	M2 = malloc(lines * sizeof(Pixel*));
-    	for (j = 0; j < columns; j++) {
-    		M = malloc(columns * sizeof(Pixel));
-    		M2 = malloc(columns * sizeof(Pixel));
-    	}
+		if (DEBUG) printf("Consegui abrir o arquivo!\n");
 
-	    while (fscanf(arq1, "%s", a) != EOF) {
-		    switch (a[0]) {
-			    case '#':
-			        fgets(a, MAX_LINE, arq1);
-			        break;
-			    /*Talvez precise tratar alguns casos específicos*/
-			    default:
-			        fscanf(arq1, "%f %f %f", &M[i][j].R, &M[i][j].G, &M[i][j].B);
-			        break;
-			    }
+		cont = 0;
+	    while ((a[0] = fgetc(arq1)) != EOF) {
+		    if (a[0] == '#' || a[0] == 'P') {
+		        fgets(a, MAX_LINE, arq1);
+
+		        if (DEBUG) printf("Ignorando comentários...\n");
 		    }
+			else if (cont == 0) {
+				ungetc(a[0], arq1);
+				fscanf(arq1,"%d %d\n", &columns, &lines);
+				fscanf(arq1,"%d\n", &comp_max_val);
+				cont++;
+
+				if (DEBUG) {
+					printf("Num_linhas = %d, num_colunas = %d\n", lines, columns);
+					printf("comp_max_val = %d\n", comp_max_val);
+				}
+		        
+				/*Alocação das matrizes*/
+		        M = malloc(lines * sizeof(Pixel*));
+		    	M2 = malloc(lines * sizeof(Pixel*));
+		    	for (i = 0; i < lines; i++) {
+		    		M[i] = malloc(columns * sizeof(Pixel));
+		    		M2[i] = malloc(columns * sizeof(Pixel));
+		    	}				
+			}
+		    else
+		        fscanf(arq1, "%f %f %f", &M[i][j].R, &M[i][j].G, &M[i][j].B);
+			
+	    }
 	}
 
 	fclose(arq1);
-
+	if (DEBUG) printf("Fechei o arquivo!\n");
 
 	/* Calcular Rx, Ry, Bx e By quando ler a entrada \/*/
 	M2[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
@@ -95,7 +108,7 @@ int main(int argc, char **argv) {
     for (i = 0; i < nr_threads; i++)   pthread_join(id[i], NULL);
 
     /*IMPORTANTE: As bordas nunca se alteram.
-	* Precisa fazer verificar se não é borda*/
+	* Precisa verificar se não é borda*/
 	for (k = 0; k < nr_inter; k++) {
 
 		aux = M;
@@ -156,9 +169,40 @@ int main(int argc, char **argv) {
 						M2[i][j].By += val;
 					}
 				}
+			}
+		}
 
-				/* Checar se os pixels vizinhos estouraram*/
+	/*O bloco abaixo checa se os pixels vizinhos estouraram*/
+		for (i = 1; i < lines - 1; i++) {
+			for (j = 1; j < columns - 1; j++) {
+				/*Paralelizar as checagens do R e B se tiver pelo menos oito threads, podendo
+				deixar os 4 if's internos em paralelo*/
 
+				/*Checa o R*/
+				if (M2[i][j].R > 1) {
+					distribute = (M2[i][j].R - 1) / 4;
+					M2[i][j].R = 1; 
+					
+					/*Dá para parelelizar os if's abaixo*/
+
+					/*Os if's checam se os vizinhos não estão na borda e não serão estourados*/
+					if (i-1 > 0 && M2[i-1][j].R + distribute < 1) M2[i-1][j].R += distribute;
+					if (i+1 < lines && M2[i+1][j].R + distribute < 1) M2[i+1][j].R += distribute;
+					if (j-1 > 0 && M2[i][j-1].R + distribute < 1) M2[i][j-1].R += distribute;
+					if (j+1 < columns && M2[i][j+1].R + distribute < 1) M2[i][j+1].R += distribute;
+				}
+
+				/*Checa o B*/
+				if (M2[i][j].B > 1) {
+					distribute = (M2[i][j].B - 1) / 4;
+					M2[i][j].B = 1; 
+					
+					/*Os if's checam se os vizinhos não estão na borda e não serão estourados*/
+					if (i-1 > 0 && M2[i-1][j].B + distribute < 1) M2[i-1][j].B += distribute;
+					if (i+1 < lines && M2[i+1][j].B + distribute < 1) M2[i+1][j].B += distribute;
+					if (j-1 > 0 && M2[i][j-1].B + distribute < 1) M2[i][j-1].B += distribute;
+					if (j+1 < columns && M2[i][j+1].B + distribute < 1) M2[i][j+1].B += distribute;
+				}
 			}
 		}
 
