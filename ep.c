@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <math.h>
 #include "util.h"
 
 #define TRUE 1
@@ -13,11 +14,13 @@
 long int  x;
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 
-/*Colocar fururamente essa função no util*/
-void * do_job(void *stuff) {
+/*Colocar futuramente essa função no util*/
+void * do_job() {
   	pthread_mutex_lock(&mut);
 	x++;
 	pthread_mutex_unlock(&mut);
+
+    pthread_exit(0);
 }
 
 
@@ -30,9 +33,9 @@ int main(int argc, char **argv) {
 	int i, j, k, columns, lines, comp_max_val;
 	pthread_t *id;
 	float val;
+    Pixel **M, **M2, **aux; /*Matriz de pixels*/
 
-	Pixel **M, **M2, **aux; /*Matriz de pixels*/
-
+    i = j = k = 0;
    	/*Usemode*/
    	if (argc < 5) {
    		printf("Modo de usar:\n\tArg1: nome do arquivo de entrada;\n\tArg2: nome do arquivo de saída\n\t");
@@ -56,14 +59,22 @@ int main(int argc, char **argv) {
 		/*Read the input file*/
 		fscanf(arq1,"%d %d\n", &columns, &lines);
 		fscanf(arq1,"%d\n", &comp_max_val);
+
+        M = malloc(lines * sizeof(Pixel*));
+    	M2 = malloc(lines * sizeof(Pixel*));
+    	for (j = 0; j < columns; j++) {
+    		M = malloc(columns * sizeof(Pixel));
+    		M2 = malloc(columns * sizeof(Pixel));
+    	}
+
 	    while (fscanf(arq1, "%s", a) != EOF) {
 		    switch (a[0]) {
 			    case '#':
 			        fgets(a, MAX_LINE, arq1);
 			        break;
-			    /*Talvez precise tratar alguns casos específicos*/    
+			    /*Talvez precise tratar alguns casos específicos*/
 			    default:
-			        fscanf(arq1, "%f %f %f", M[i][j].R, M[i][j].G, M[i][j].B);
+			        fscanf(arq1, "%f %f %f", &M[i][j].R, &M[i][j].G, &M[i][j].B);
 			        break;
 			    }
 		    }
@@ -71,12 +82,6 @@ int main(int argc, char **argv) {
 
 	fclose(arq1);
 
-	M = malloc(lines * sizeof(*Pixel));
-	M2 = malloc(lines * sizeof(*Pixel));
-	for (j = 0; j < columns; j++) {
-		M = malloc(columns * sizeof(Pixel));
-		M2 = malloc(columns * sizeof(Pixel));
-	}
 
 	/* Calcular Rx, Ry, Bx e By quando ler a entrada \/*/
 	M2[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
@@ -97,7 +102,7 @@ int main(int argc, char **argv) {
 		M = M2;
 		M2 = aux;
 		cp(M, M2, lines, columns);
-		
+
 		for (i = 1; i < lines - 1; i++) {  /*Por causa da borda*/
 			for (j = 1; j < columns - 1; j++) {
 
@@ -135,7 +140,7 @@ int main(int argc, char **argv) {
 					if (i != lines - 1) {
 						val = transfer(M[i+1][j].B, M[i][j].By);
 						M2[i+1][j].By += val;
-						M2[i][j].By -= val; 
+						M2[i][j].By -= val;
 					}
 				}
 
@@ -143,12 +148,12 @@ int main(int argc, char **argv) {
 					if (i != lines - 1) {
 						val = transfer(M[i+1][j].R, M[i][j].Ry);
 						M2[i+1][j].Ry -= val;
-						M2[i][j].Ry += val; 
+						M2[i][j].Ry += val;
 					}
 					if (i != 1) {
 						val = transfer(M[i-1][j].B, M[i][j].By);
 						M2[i-1][j].By -= val;
-						M2[i][j].By += val; 
+						M2[i][j].By += val;
 					}
 				}
 
@@ -162,7 +167,7 @@ int main(int argc, char **argv) {
 			for (j = 1; j < columns - 1; j++) {
 				M2[i][j].R = sqrt(M2[i][j].Rx * M2[i][j].Rx + M2[i][j].Ry * M2[i][j].Ry);
 				M2[i][j].B = sqrt(M2[i][j].Bx * M2[i][j].Bx + M2[i][j].By * M2[i][j].By);
-				M2[i][j].G += atan(M2[i][j].R, M2[i][j].B); /*Checar se o sentido está correto - trocar talvez para -=*/
+				M2[i][j].G += atan((double) M2[i][j].R/M2[i][j].B); /*Checar se o sentido está correto - trocar talvez para -=*/
 				if (M2[i][j].G > 2 * PI) /*Pensar em uma forma de tratar quando ele estourar para menos (valor de ângulo negativo)*/
 					M2[i][j].G -= 2 * PI;
 			}
