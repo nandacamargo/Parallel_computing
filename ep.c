@@ -3,6 +3,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <math.h>
+#include <omp.h>
 #include "util.h"
 
 #define TRUE 1
@@ -78,18 +79,18 @@ int main(int argc, char **argv) {
 					printf("Num_linhas = %d, num_colunas = %d\n", lines, columns);
 					printf("comp_max_val = %d\n", comp_max_val);
 				}
-		        
+
 				/*Alocação das matrizes*/
 		        M = malloc(lines * sizeof(Pixel*));
 		    	M2 = malloc(lines * sizeof(Pixel*));
 		    	for (i = 0; i < lines; i++) {
 		    		M[i] = malloc(columns * sizeof(Pixel));
 		    		M2[i] = malloc(columns * sizeof(Pixel));
-		    	}				
+		    	}
 			}
 		    else
 		        fscanf(arq1, "%f %f %f", &M[i][j].R, &M[i][j].G, &M[i][j].B);
-			
+
 	    }
 	}
 
@@ -181,8 +182,8 @@ int main(int argc, char **argv) {
 				/*Checa o R*/
 				if (M2[i][j].R > 1) {
 					distribute = (M2[i][j].R - 1) / 4;
-					M2[i][j].R = 1; 
-					
+					M2[i][j].R = 1;
+
 					/*Dá para parelelizar os if's abaixo*/
 
 					/*Os if's checam se os vizinhos não estão na borda e não serão estourados*/
@@ -195,8 +196,8 @@ int main(int argc, char **argv) {
 				/*Checa o B*/
 				if (M2[i][j].B > 1) {
 					distribute = (M2[i][j].B - 1) / 4;
-					M2[i][j].B = 1; 
-					
+					M2[i][j].B = 1;
+
 					/*Os if's checam se os vizinhos não estão na borda e não serão estourados*/
 					if (i-1 > 0 && M2[i-1][j].B + distribute < 1) M2[i-1][j].B += distribute;
 					if (i+1 < lines && M2[i+1][j].B + distribute < 1) M2[i+1][j].B += distribute;

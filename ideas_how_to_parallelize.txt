@@ -1,0 +1,6 @@
+- Utilizar omp_num_procs() para obter o número de processadores;
+- Setar o número de threads com omp_set_num_threads com base no valor acima;
+- Usar schedule dynamic;
+- Utilizar mais de um #pragma omp parallel for;
+- Verificar se dá para paralelizar os if's
+- Talvez usar o OMP_NESTED para paralelização recursiva.
