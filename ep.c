@@ -81,15 +81,26 @@ int main(int argc, char **argv) {
 				}
 
 				/*Alocação das matrizes*/
-		        M = malloc(lines * sizeof(Pixel*));
-		    	M2 = malloc(lines * sizeof(Pixel*));
+				M = (Pixel **) malloc(lines * sizeof(Pixel*));
+		    	M2 = (Pixel **) malloc(lines * sizeof(Pixel*));
 		    	for (i = 0; i < lines; i++) {
-		    		M[i] = malloc(columns * sizeof(Pixel));
-		    		M2[i] = malloc(columns * sizeof(Pixel));
+		    		M[i] = (Pixel *) malloc(columns * sizeof(Pixel));
+		    		M2[i] = (Pixel *) malloc(columns * sizeof(Pixel));
 		    	}
 			}
-		    else
-		        fscanf(arq1, "%f %f %f", &M[i][j].R, &M[i][j].G, &M[i][j].B);
+		    else {
+		    	ungetc(a[0], arq1);
+		    	for (i = 0; i < lines; i++) {
+		    		for (j = 0; j < columns; j++) {
+		    		    fscanf(arq1, "%f %f %f", &M[i][j].R, &M[i][j].G, &M[i][j].B);
+						/* Calcular Rx, Ry, Bx e By quando ler a entrada \/*/
+						M[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
+						M[i][j].Bx = horizontal_component(M[i][j].B, M[i][j].G);
+						M[i][j].Ry = vertical_component(M[i][j].R, M[i][j].G);
+						M[i][j].By = vertical_component(M[i][j].B, M[i][j].G);
+		    		}
+		    	}
+		    }
 
 	    }
 	}
@@ -97,25 +108,30 @@ int main(int argc, char **argv) {
 	fclose(arq1);
 	if (DEBUG) printf("Fechei o arquivo!\n");
 
-	/* Calcular Rx, Ry, Bx e By quando ler a entrada \/*/
-	M2[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
-	M2[i][j].Bx = horizontal_component(M[i][j].B, M[i][j].G);
-	M2[i][j].Ry = vertical_component(M[i][j].R, M[i][j].G);
-	M2[i][j].By = vertical_component(M[i][j].B, M[i][j].G);
 
 
 	/*Create the threads and divide the work between them*/
     for (i = 0; i < nr_threads; i++)   pthread_create(&id[i], NULL, do_job, NULL);
     for (i = 0; i < nr_threads; i++)   pthread_join(id[i], NULL);
 
-    /*IMPORTANTE: As bordas nunca se alteram.
-	* Precisa verificar se não é borda*/
+    /*IMPORTANTE: As bordas nunca se alteram.*/
 	for (k = 0; k < nr_inter; k++) {
 
 		aux = M;
 		M = M2;
 		M2 = aux;
 		cp(M, M2, lines, columns);
+
+		if (DEBUG) {
+			printf("M2:\n");
+			for (i = 0; i < lines; i++) {
+			    for (j = 0; j < columns; j++)
+			    	printf("%f ", M2[i][j].Rx);
+			    printf("\n");
+			}			
+		}
+
+		break;
 
 		for (i = 1; i < lines - 1; i++) {  /*Por causa da borda*/
 			for (j = 1; j < columns - 1; j++) {
@@ -237,9 +253,10 @@ int main(int argc, char **argv) {
 
 	    for (i = 0; i < lines; i++) {
 			for (j = 0; j < columns; j++) {
-				fprintf(arq2, "%c%c%c",
-				   (unsigned char)(255* M[i][j].R), (unsigned char)(255* M[i][j].G), (unsigned char)(255* M[i][j].B));
-			   }
+				fprintf(arq2, "%d %d %d    ",
+				   (int)(255* M[i][j].R), (int)(255* M[i][j].G), (int)(255* M[i][j].B));
+		    }
+		    fprintf(arq2, "\n");   
 		}
 
 	    fprintf(stdout, "A imagem foi salva no arquivo: %s\n", outfile);
