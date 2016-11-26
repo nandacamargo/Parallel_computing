@@ -10,7 +10,8 @@
 #define FALSE 0
 #define DEBUG 1
 #define NMAX 1000
-#define MAX_LINE 256
+#define MAX_LINE 256 /*Intervalo [0, 255]*/
+#define RGB_SIZE 256
 #define PI 3.14159265359
 
 long int  x;
@@ -35,6 +36,7 @@ int main(int argc, char **argv) {
 	int i, j, k, cont, columns, lines, comp_max_val;
 	pthread_t *id;
 	float val, distribute;
+	float gx, gy, g;
     Pixel **M, **M2, **aux; /*Matriz de pixels*/
 
     i = j = k = 0;
@@ -93,6 +95,10 @@ int main(int argc, char **argv) {
 		    	for (i = 0; i < lines; i++) {
 		    		for (j = 0; j < columns; j++) {
 		    		    fscanf(arq1, "%f %f %f", &M[i][j].R, &M[i][j].G, &M[i][j].B);
+		    		    M[i][j].R /= RGB_SIZE; 
+		    		    M[i][j].G = (2*PI * M[i][j].G) / RGB_SIZE; 
+		    		    M[i][j].B /= RGB_SIZE;
+
 						/* Calcular Rx, Ry, Bx e By quando ler a entrada \/*/
 						M[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
 						M[i][j].Bx = horizontal_component(M[i][j].B, M[i][j].G);
@@ -100,15 +106,16 @@ int main(int argc, char **argv) {
 						M[i][j].By = vertical_component(M[i][j].B, M[i][j].G);
 		    		}
 		    	}
+		    	break;
 		    }
 
 	    }
 	}
 
 	fclose(arq1);
-	if (DEBUG) printf("Fechei o arquivo!\n");
+	if (DEBUG) printf("Arquivo lido!\n");
 
-
+	
 
 	/*Create the threads and divide the work between them*/
     for (i = 0; i < nr_threads; i++)   pthread_create(&id[i], NULL, do_job, NULL);
@@ -120,18 +127,17 @@ int main(int argc, char **argv) {
 		aux = M;
 		M = M2;
 		M2 = aux;
-		cp(M, M2, lines, columns);
+		/*cp(M, M2, lines, columns);*/
 
-		if (DEBUG) {
+		/*if (DEBUG) {
 			printf("M2:\n");
 			for (i = 0; i < lines; i++) {
 			    for (j = 0; j < columns; j++)
-			    	printf("%f ", M2[i][j].Rx);
+			    	printf("%f ", M2[i][j].R);
 			    printf("\n");
 			}			
-		}
+		}*/
 
-		break;
 
 		for (i = 1; i < lines - 1; i++) {  /*Por causa da borda*/
 			for (j = 1; j < columns - 1; j++) {
@@ -226,35 +232,38 @@ int main(int argc, char **argv) {
 		/*Laço para atualizar G*/
 		for (i = 1; i < lines - 1; i++) {
 			for (j = 1; j < columns - 1; j++) {
-				M2[i][j].R = sqrt(M2[i][j].Rx * M2[i][j].Rx + M2[i][j].Ry * M2[i][j].Ry);
-				M2[i][j].B = sqrt(M2[i][j].Bx * M2[i][j].Bx + M2[i][j].By * M2[i][j].By);
-				M2[i][j].G += atan((double) M2[i][j].R/M2[i][j].B); /*Checar se o sentido está correto - trocar talvez para -=*/
-				if (M2[i][j].G > 2 * PI) /*Pensar em uma forma de tratar quando ele estourar para menos (valor de ângulo negativo)*/
+
+				gx = M2[i][j].Rx + M2[i][j].Bx;
+				gy = M2[i][j].Ry + M2[i][j].By;
+				g = sqrt((gx*gx) + (gy*gy));
+				
+				M2[i][j].G += g;
+				
+				if (M2[i][j].G > 2 * PI)
 					M2[i][j].G -= 2 * PI;
 			}
 		}
 	}
 
 	/*Feito isso, checar se algum valor ultrapassou 1
-	*ou ficou negativo (embora acho que não dê para
+	*ou ficou negativo (embora provavelmente não dê para
 	*ficar negativo)*/
 
 
-	/*Escrever no arquivo de saída*/
+	/*Escreve no arquivo de saída*/
 	arq2 = fopen(outfile, "w");
 
    	if (arq2 == NULL)
 	    printf("Erro, não foi possível abrir o arquivo\n");
 	else {
-		/*Write matriz in outfile*/
 
 		/*sprintf(outfile, "%s.ppm", outfile);*/
 	    fprintf(arq2, "P3\n%d %d\n255\n", columns, lines);
 
 	    for (i = 0; i < lines; i++) {
 			for (j = 0; j < columns; j++) {
-				fprintf(arq2, "%d %d %d    ",
-				   (int)(255* M[i][j].R), (int)(255* M[i][j].G), (int)(255* M[i][j].B));
+				fprintf(arq2, "%.3f %.3f %.3f    ",
+				   (float)(RGB_SIZE* M2[i][j].R), (float)((RGB_SIZE* M2[i][j].G) / (2*PI)), (float)(RGB_SIZE* M2[i][j].B));
 		    }
 		    fprintf(arq2, "\n");   
 		}
