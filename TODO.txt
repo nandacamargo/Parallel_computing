@@ -1,13 +1,7 @@
 TO DO LIST:
 -------------
 
-- Verificar se os valores da matriz estouraram
-       - Para mais de 1   Feito
-       - Para menos de 0  Pensar em como seria feita a redistribuição nesse caso (1/4 de cada valor dos vizinhos?)
-
-- Testar com algum arquivo ppm a leitura, escrita e se os valores estão sendo transferidos
-adequadamente
-
-- Paralelizar os for's com OpenMP
+- Verificar o cálculo de G. Da outra forma estava dando underflow. Da forma atual, a imagem
+está escurecida.
 
 - Tentar fazer otimizações no código para reduzir o tempo de execução

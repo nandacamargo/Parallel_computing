@@ -11,15 +11,15 @@ de cada componente de cor*/
 
 
 /*Na biblioteca do C o valor já é dado em radianos*/
-float horizontal_component(float comp, float angle) {
+double horizontal_component(double comp, double angle) {
     return comp * sin(angle);
 }
 
-float vertical_component(float comp, float angle) {
+double vertical_component(double comp, double angle) {
     return comp * cos(angle);
 }
 
-float transfer(float neighbor, float current){
+double transfer(double neighbor, double current){
     return ((1 - neighbor) * current) / 4;
 
     /*Precisa entender o que é o C_d da fórmula*/
