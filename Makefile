@@ -6,6 +6,7 @@ OBJ = util.o ep.o
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
+# ep_seq: $(OBJ)	
 ep: $(OBJ)
 	gcc -o $@ $^ $(CFLAGS)
 

@@ -1,4 +1,5 @@
 FisicaAlternativa.pdf
 *.o
 ep
-saida.txt
+ep_seq
+saida*
