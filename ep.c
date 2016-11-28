@@ -157,6 +157,10 @@ void update_green(int i, int j)
   float g = sqrt((cxg * cxg) + (cyg * cyg));
   float theta = 2 * PI * g;
 
+  if(g > 1) g = 0.99;
+  if(g < -1) g = -0.99;
+  theta = 2 * PI * g;
+
   image[i][j].theta += theta;
   image[i][j].g = theta / (2 * PI);
 }
@@ -207,6 +211,12 @@ void verify_pixel(int i, int j)
       image[i][j - 1].r += share;
       pthread_mutex_unlock(&image[i][j - 1].lock);
     }
+    /*Values will blow, so we will adjust to maximum value and update respective components for green computation later*/
+    else {
+      image[i][j].r = 0.99;
+      image[i][j].cxr = image[i][j].r * sin(image[i][j].theta);
+      image[i][j].cyr = image[i][j].r * cos(image[i][j].theta);
+    }
   }
 
   if(image[i][j].b > 1) {
@@ -250,6 +260,12 @@ void verify_pixel(int i, int j)
       pthread_mutex_lock(&image[i][j - 1].lock);
       image[i][j - 1].b += share;
       pthread_mutex_unlock(&image[i][j - 1].lock);
+    }
+    /*Values will blow, so we will adjust to maximum value and update respective components for green computation later*/
+    else {
+      image[i][j].b = 0.99;
+      image[i][j].cxb = (-1) * image[i][j].b * sin(image[i][j].theta);
+      image[i][j].cyb = (-1) * image[i][j].b * cos(image[i][j].theta);
     }
   }
 
