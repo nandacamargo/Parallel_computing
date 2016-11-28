@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
 	int i, j, k, cont, columns, lines, comp_max_val;
 	double val, distribute;
 	double gx, gy, g, angle;
-    Pixel **M, **M2/*, **aux*/; /*Matriz de pixels*/
+    Pixel **M; /*Matriz de pixels*/
 
     i = j = k = 0;
    	/*Modo de usar*/
@@ -39,10 +39,9 @@ int main(int argc, char **argv) {
 	outfile = argv[2];
 	nr_inter = atoi(argv[3]);
 	nr_proc = atoi(argv[4]);
-    /*nr_threads = 2 * nr_proc;*/ /*Considerando hyperthread*/
 
-    /*id = malloc(nr_threads * sizeof(int));*/
-
+	if (nr_proc <= 0) nr_proc = 1;
+    
 	arq1 = fopen(infile, "r");
 
    	if (arq1 == NULL)
@@ -56,8 +55,6 @@ int main(int argc, char **argv) {
 	    while ((a[0] = fgetc(arq1)) != EOF) {
 		    if (a[0] == '#' || a[0] == 'P') {
 		        fgets(a, MAX_LINE, arq1);
-
-		        /*if (DEBUG) printf("Ignorando comentários...\n");*/
 		    }
 			else if (cont == 0) {
 				ungetc(a[0], arq1);
@@ -65,35 +62,29 @@ int main(int argc, char **argv) {
 				fscanf(arq1,"%d\n", &comp_max_val);
 				cont++;
 
-				/*if (DEBUG) {
-					printf("Num_linhas = %d, num_colunas = %d\n", lines, columns);
-					printf("comp_max_val = %d\n", comp_max_val);
-				}*/
-
+	
 				/*Alocação das matrizes*/
 				M = (Pixel **) malloc(lines * sizeof(Pixel*));
-		    	M2 = (Pixel **) malloc(lines * sizeof(Pixel*));
 		    	for (i = 0; i < lines; i++) {
 		    		M[i] = (Pixel *) malloc(columns * sizeof(Pixel));
-		    		M2[i] = (Pixel *) malloc(columns * sizeof(Pixel));
 		    	}
 			}
 		    else {
 		    	ungetc(a[0], arq1);
 		    	for (i = 0; i < lines; i++) {
 		    		for (j = 0; j < columns; j++) {
-		    		    fscanf(arq1, "%lf %lf %lf", &M2[i][j].R, &M2[i][j].G, &M2[i][j].B);
-		    		    M2[i][j].R /= RGB_SIZE;
-		    		    M2[i][j].G /= RGB_SIZE; 
+		    		    fscanf(arq1, "%lf %lf %lf", &M[i][j].R, &M[i][j].G, &M[i][j].B);
+		    		    M[i][j].R /= RGB_SIZE;
+		    		    M[i][j].G /= RGB_SIZE; 
 		    		    /*M2[i][j].G = (2*PI * M2[i][j].G) / RGB_SIZE; */
-		    		    M2[i][j].B /= RGB_SIZE;
-		    		    M2[i][j].ang = 2*PI * M[i][j].G;
+		    		    M[i][j].B /= RGB_SIZE;
+		    		    M[i][j].ang = 2 * PI * M[i][j].G;
 
 						/* Calcular Rx, Ry, Bx e By quando ler a entrada \/*/
-						M2[i][j].Rx = horizontal_component(M2[i][j].R, M2[i][j].G);
-						M2[i][j].Bx = (-1) * horizontal_component(M2[i][j].B, M2[i][j].G);
-						M2[i][j].Ry = vertical_component(M2[i][j].R, M2[i][j].G);
-						M2[i][j].By = (-1) * vertical_component(M2[i][j].B, M2[i][j].G);
+						M[i][j].Rx = horizontal_component(M[i][j].R, M[i][j].G);
+						M[i][j].Bx = (-1) * horizontal_component(M[i][j].B, M[i][j].G);
+						M[i][j].Ry = vertical_component(M[i][j].R, M[i][j].G);
+						M[i][j].By = (-1) * vertical_component(M[i][j].B, M[i][j].G);
 		    		}
 		    	}
 		    	break;
@@ -109,14 +100,8 @@ int main(int argc, char **argv) {
     /*IMPORTANTE: As bordas nunca se alteram.*/
 	for (k = 0; k < nr_inter; k++) {
 
-		/*aux = M;
-		M = M2;
-		M2 = aux;*/
-		/*cp(M2, M, lines, columns);*/
-
 		if (lines - 2 < nr_proc) nr_proc = 1;
 
-		/*#pragma omp parallel for private(i, j, val, thread_num, num_threads, start,end, rest) {*/
 		#pragma omp parallel firstprivate(lines, columns) private(i, j, val) num_threads(nr_proc)
 		{
 		    int thread_num = omp_get_thread_num();
@@ -132,105 +117,99 @@ int main(int argc, char **argv) {
 
 		    end = (thread_num + 1) * (lines - 2) / num_threads + 1;
 		    if (thread_num < rest) end++;
-
-		    /*if (DEBUG) {
-			    printf("thread =%d start=%d end=%d\n", thread_num, start, end);
-			}*/
-
-			/*for (i = 1; i < lines - 1; i++) { */
- 			
+		
  			for (i = start; i < end; i++) {	/*Por causa da borda*/
 				for (j = 1; j < columns - 1; j++) {
 
-					if (M2[i][j].Rx > 0) {
+					if (M[i][j].Rx > 0) {
 						if (j != columns -1) {
-							val = transfer(M2[i][j+1].R, M2[i][j].Rx);
+							val = transfer(M[i][j+1].R, M[i][j].Rx);
 							if (i != start && i != end) {
-									M2[i][j+1].Rx += val;
-									M2[i][j].Rx -= val;
+									M[i][j+1].Rx += val;
+									M[i][j].Rx -= val;
 							}
 							else {
 								#pragma omp critical 
 								{
-									M2[i][j+1].Rx += val;
-									M2[i][j].Rx -= val;
+									M[i][j+1].Rx += val;
+									M[i][j].Rx -= val;
 							    }
 							}	
 						}
 						if (j != 1) {
-							val = transfer(M2[i][j-1].B, M2[i][j].Bx);
+							val = transfer(M[i][j-1].B, M[i][j].Bx);
 							if (i != start && i != end) {
 									/*Recebe no sentido oposto*/
-									M2[i][j-1].Bx += val; 
-									M2[i][j].Bx -= val;
+									M[i][j-1].Bx += val; 
+									M[i][j].Bx -= val;
 							}
 							else {
 								#pragma omp critical 
 								{
-									M2[i][j-1].Bx += val;
-									M2[i][j].Bx -= val;
+									M[i][j-1].Bx += val;
+									M[i][j].Bx -= val;
 							    }
 							}								
 						}
 					}
 					else { /*Recebe um valor positivo*/
 						if (j != 1) {
-							val = transfer(M2[i][j-1].R, M2[i][j].Rx);
+							val = transfer(M[i][j-1].R, M[i][j].Rx);
 							if (i != start && i != end) {
-									M2[i][j-1].Rx -= val;
-									M2[i][j].Rx += val;
+									M[i][j-1].Rx -= val;
+									M[i][j].Rx += val;
 							}
 							else {
 								#pragma omp critical 
 								{
-									M2[i][j-1].Rx -= val;
-									M2[i][j].Rx += val;
+									M[i][j-1].Rx -= val;
+									M[i][j].Rx += val;
 							    }
 							}
 						}
 
 						if (j != columns - 1) {
-							val = transfer(M2[i][j+1].B, M2[i][j].Bx);
+							val = transfer(M[i][j+1].B, M[i][j].Bx);
 							if (i != start && i != end) {
-									M2[i][j+1].Bx -= val;  /*Recebe no sentido oposto*/
-									M2[i][j].Bx += val;
+									M[i][j+1].Bx -= val;  /*Recebe no sentido oposto*/
+									M[i][j].Bx += val;
 							}
 							else {
 								#pragma omp critical 
 								{
-									M2[i][j+1].Bx -= val;
-									M2[i][j].Bx += val;
+									M[i][j+1].Bx -= val;
+									M[i][j].Bx += val;
 							    }
 							}
 						}
 					}
 
-					if (M2[i][j].Ry > 0) {
+					if (M[i][j].Ry > 0) {
 						if (i != 1) {
-							val = transfer(M2[i-1][j].R, M2[i][j].Ry);
+							val = transfer(M[i-1][j].R, M[i][j].Ry);
 							if (i != start && i != end) {
-									M2[i-1][j].Ry += val;
-									M2[i][j].Ry -= val;
+									M[i-1][j].Ry += val;
+									M[i][j].Ry -= val;
 							}
 							else {
 								#pragma omp critical 
 								{
-									M2[i-1][j].Ry += val;
-									M2[i][j].Ry -= val;
+									M[i-1][j].Ry += val;
+									M[i][j].Ry -= val;
 							    }
 							}
 						}
 						if (i != lines - 1) {
-							val = transfer(M2[i+1][j].B, M2[i][j].By);
+							val = transfer(M[i+1][j].B, M[i][j].By);
 							if (i != start && i != end) {
-									M2[i+1][j].By += val;
-									M2[i][j].By -= val;
+									M[i+1][j].By += val;
+									M[i][j].By -= val;
 							}
 							else {
 								#pragma omp critical 
 								{
-									M2[i+1][j].By += val;
-									M2[i][j].By -= val;
+									M[i+1][j].By += val;
+									M[i][j].By -= val;
 							    }
 							}
 						}
@@ -238,55 +217,36 @@ int main(int argc, char **argv) {
 
 					else { /*Recebe um valor positivo*/
 						if (i != lines - 1) {
-							val = transfer(M2[i+1][j].R, M2[i][j].Ry);
+							val = transfer(M[i+1][j].R, M[i][j].Ry);
 							if (i != start && i != end) {
-									M2[i+1][j].Ry -= val;
-									M2[i][j].Ry += val;
+									M[i+1][j].Ry -= val;
+									M[i][j].Ry += val;
 							}
 							else {
 								#pragma omp critical 
 								{
-									M2[i+1][j].Ry -= val;
-									M2[i][j].Ry += val;
+									M[i+1][j].Ry -= val;
+									M[i][j].Ry += val;
 							    }
 							}
 						}
 						if (i != 1) {
-							val = transfer(M2[i-1][j].B, M2[i][j].By);
+							val = transfer(M[i-1][j].B, M[i][j].By);
 							if (i != start && i != end) {
-									M2[i-1][j].By -= val;
-									M2[i][j].By += val;
+									M[i-1][j].By -= val;
+									M[i][j].By += val;
 							}
 							else {
 								#pragma omp critical 
 								{
-									M2[i-1][j].By -= val;
-									M2[i][j].By += val;
+									M[i-1][j].By -= val;
+									M[i][j].By += val;
 							    }
 							}
 						}
 					}
 				}
 			}
-		
-
-			/*if (DEBUG) {
-				printf("M:\n");
-				for (i = 0; i < lines; i++) {
-				    for (j = 0; j < columns; j++)
-				    	printf("%f ", M[i][j].R);
-				    printf("\n");
-				}			
-			}*/
-
-			/*if (DEBUG) {
-				printf("M2:\n");
-				for (i = 0; i < lines; i++) {
-				    for (j = 0; j < columns; j++)
-				    	printf("%f ", M2[i][j].R);
-				    printf("\n");
-				}			
-			}*/
 
 		}
 
@@ -295,28 +255,28 @@ int main(int argc, char **argv) {
 			for (j = 1; j < columns - 1; j++) {
 
 				/*Checa o R*/
-				if (M2[i][j].R > 1) {
-					distribute = (M2[i][j].R - 1) / 4;
-					M2[i][j].R = 1;
+				if (M[i][j].R > 1) {
+					distribute = (M[i][j].R - 1) / 4;
+					M[i][j].R = 1;
 
 					/*Os if's checam se os vizinhos não estão na borda e não serão estourados*/
 
-					if (i-1 > 0 && M2[i-1][j].R + distribute < 1) M2[i-1][j].R += distribute;
-					if (i+1 < lines && M2[i+1][j].R + distribute < 1) M2[i+1][j].R += distribute;
-					if (j-1 > 0 && M2[i][j-1].R + distribute < 1) M2[i][j-1].R += distribute;
-					if (j+1 < columns && M2[i][j+1].R + distribute < 1) M2[i][j+1].R += distribute;
+					if (i-1 > 0 && M[i-1][j].R + distribute < 1) M[i-1][j].R += distribute;
+					if (i+1 < lines && M[i+1][j].R + distribute < 1) M[i+1][j].R += distribute;
+					if (j-1 > 0 && M[i][j-1].R + distribute < 1) M[i][j-1].R += distribute;
+					if (j+1 < columns && M[i][j+1].R + distribute < 1) M[i][j+1].R += distribute;
 				}
 
 				/*Checa o B*/
-				if (M2[i][j].B > 1) {
-					distribute = (M2[i][j].B - 1) / 4;
-					M2[i][j].B = 1;
+				if (M[i][j].B > 1) {
+					distribute = (M[i][j].B - 1) / 4;
+					M[i][j].B = 1;
 
 					/*Os if's checam se os vizinhos não estão na borda e não serão estourados*/
-					if (i-1 > 0 && M2[i-1][j].B + distribute < 1) M2[i-1][j].B += distribute;
-					if (i+1 < lines && M2[i+1][j].B + distribute < 1) M2[i+1][j].B += distribute;
-					if (j-1 > 0 && M2[i][j-1].B + distribute < 1) M2[i][j-1].B += distribute;
-					if (j+1 < columns && M2[i][j+1].B + distribute < 1) M2[i][j+1].B += distribute;
+					if (i-1 > 0 && M[i-1][j].B + distribute < 1) M[i-1][j].B += distribute;
+					if (i+1 < lines && M[i+1][j].B + distribute < 1) M[i+1][j].B += distribute;
+					if (j-1 > 0 && M[i][j-1].B + distribute < 1) M[i][j-1].B += distribute;
+					if (j+1 < columns && M[i][j+1].B + distribute < 1) M[i][j+1].B += distribute;
 				}
 			}
 		}
@@ -326,27 +286,20 @@ int main(int argc, char **argv) {
 			#pragma omp parallel for num_threads(nr_proc) schedule(dynamic)
 			for (j = 1; j < columns - 1; j++) {
 
-				gx = M2[i][j].Rx + M2[i][j].Bx;
-				gy = M2[i][j].Ry + M2[i][j].By;
+				gx = M[i][j].Rx + M[i][j].Bx;
+				gy = M[i][j].Ry + M[i][j].By;
 				g = sqrt((gx*gx) + (gy*gy));
 				angle = 2 * PI * g;
 				M[i][j].ang += angle;
 				
-				M2[i][j].G += g;
+				M[i][j].G += g;
 				
-				if (M2[i][j].ang > 2 * PI)
-					M2[i][j].ang -= 2*PI;
+				if (M[i][j].ang > 2 * PI)
+					M[i][j].ang -= 2*PI;
 			}
 		}
 	}
 	
-	
-    /*for (i = 0; i < lines; i++) {
-		for (j = 0; j < columns; j++) {
-			printf("%d %d %d", (int)(RGB_SIZE* M2[i][j].R), (int)((RGB_SIZE* M2[i][j].G) / (2*PI)), (int)(RGB_SIZE* M2[i][j].B));
-		}
-		printf("\n");
-	}*/
 
 	/*Escreve no arquivo de saída*/
 	arq2 = fopen(outfile, "w");
@@ -355,14 +308,13 @@ int main(int argc, char **argv) {
 	    printf("Erro, não foi possível abrir o arquivo\n");
 	else {
 
-		/*sprintf(outfile, "%s.ppm", outfile);*/
 	    fprintf(arq2, "P3\n%d %d\n255\n", columns, lines);
 	    
 	    
     	for (i = 0; i < lines; i++)
 			for (j = 0; j < columns; j++)
 				fprintf(arq2, "%d %d %d \n",
-			   		(int)(RGB_SIZE* M2[i][j].R), (int)(RGB_SIZE* M2[i][j].ang), (int)(RGB_SIZE* M2[i][j].B));
+			   		(int)(RGB_SIZE* M[i][j].R), (int)(RGB_SIZE* M[i][j].ang), (int)(RGB_SIZE* M[i][j].B));
 
 	    fprintf(stdout, "A imagem foi salva no arquivo: %s\n", outfile);
 	    fclose(arq2);
@@ -371,10 +323,8 @@ int main(int argc, char **argv) {
 
 	for (i = 0; i < lines; i++) {
 		free(M[i]);
-		free(M2[i]);
 	}
 	free(M);
-	free(M2);
 
  	return 0;
 }
