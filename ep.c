@@ -108,9 +108,9 @@ int main(int argc, char **argv) {
 	    M = M2;
 	    M2 = aux;
 
-	    cp(M, M2, lines, columns);
+	    cp(M2, M, lines, columns);
 
-		#pragma omp parallel firstprivate(lines, columns) private(i, j, val) num_threads(nr_proc)
+		#pragma omp parallel firstprivate(lines, columns) private(i, j, val) num_threads(nr_proc) shared(M)
 		{
 		    int thread_num = omp_get_thread_num();
 		    int num_threads = omp_get_num_threads();
@@ -119,11 +119,13 @@ int main(int argc, char **argv) {
 
 		    /*Divide os chunks para cada thread. O + 1 é para pular o zero, que é borda*/
 		    /*Como sempre é menor estrito que end, não precisa se preocupar com a borda final*/
-		    start = thread_num * (lines - 2) / num_threads + 1;
+	        start = thread_num * (lines - 2) / num_threads + 1;
 		    if (thread_num != 0  && (thread_num - 1) < rest) start++;
 
 		    end = (thread_num + 1) * (lines - 2) / num_threads + 1;
 		    if (thread_num < rest) end++;
+
+		    /*printf("n_ts:%d [t_n:%d] start = %d end = %d\n", num_threads, thread_num, start, end);*/
 		
  			for (i = start; i < end; i++) {	/*Por causa da borda*/
 				for (j = 1; j < columns - 1; j++) {
@@ -131,7 +133,7 @@ int main(int argc, char **argv) {
 					if (M2[i][j].Rx > 0) {
 						if (j != columns -1) {
 							val = transfer(M2[i][j+1].R, M2[i][j].Rx);
-							if (i != start && i != end) {
+							if (i != start && i != end - 1) {
 									M[i][j+1].Rx += val;
 									M[i][j].Rx -= val;
 							}
@@ -145,7 +147,7 @@ int main(int argc, char **argv) {
 						}
 						if (j != 1) {
 							val = transfer(M2[i][j-1].B, M2[i][j].Bx);
-							if (i != start && i != end) {
+							if (i != start && i != end - 1) {
 									/*Recebe no sentido oposto*/
 									M[i][j-1].Bx += val; 
 									M[i][j].Bx -= val;
@@ -162,7 +164,7 @@ int main(int argc, char **argv) {
 					else { /*Recebe um valor positivo*/
 						if (j != 1) {
 							val = transfer(M2[i][j-1].R, M2[i][j].Rx);
-							if (i != start && i != end) {
+							if (i != start && i != end - 1) {
 									M[i][j-1].Rx -= val;
 									M[i][j].Rx += val;
 							}
@@ -177,7 +179,7 @@ int main(int argc, char **argv) {
 
 						if (j != columns - 1) {
 							val = transfer(M2[i][j+1].B, M2[i][j].Bx);
-							if (i != start && i != end) {
+							if (i != start && i != end - 1) {
 									M[i][j+1].Bx -= val;  /*Recebe no sentido oposto*/
 									M[i][j].Bx += val;
 							}
@@ -194,7 +196,7 @@ int main(int argc, char **argv) {
 					if (M2[i][j].Ry > 0) {
 						if (i != 1) {
 							val = transfer(M2[i-1][j].R, M2[i][j].Ry);
-							if (i != start && i != end) {
+							if (i >= start + 1 && i != end - 1) {
 									M[i-1][j].Ry += val;
 									M[i][j].Ry -= val;
 							}
@@ -208,7 +210,7 @@ int main(int argc, char **argv) {
 						}
 						if (i != lines - 1) {
 							val = transfer(M2[i+1][j].B, M2[i][j].By);
-							if (i != start && i != end) {
+							if (i != start && i <= end - 2) {
 									M[i+1][j].By += val;
 									M[i][j].By -= val;
 							}
@@ -225,7 +227,7 @@ int main(int argc, char **argv) {
 					else { /*Recebe um valor positivo*/
 						if (i != lines - 1) {
 							val = transfer(M2[i+1][j].R, M2[i][j].Ry);
-							if (i != start && i != end) {
+							if (i != start && i <= end - 2) {
 									M[i+1][j].Ry -= val;
 									M[i][j].Ry += val;
 							}
@@ -239,7 +241,7 @@ int main(int argc, char **argv) {
 						}
 						if (i != 1) {
 							val = transfer(M2[i-1][j].B, M2[i][j].By);
-							if (i != start && i != end) {
+							if (i >= start + 1 && i != end) {
 									M[i-1][j].By -= val;
 									M[i][j].By += val;
 							}
@@ -260,8 +262,8 @@ int main(int argc, char **argv) {
 		/*O bloco abaixo calcula as componentes R e B dos pixels*/
 		for (i = 1; i < lines - 1; i++) {
 			for (j = 1; j < columns - 1; j++) {
-				M[i][j].R = sqrt((M[i][j].Rx*M[i][j].Rx) + (M[i][j].Ry*M[i][j].Ry));
-				M[i][j].B = sqrt((M[i][j].Bx*M[i][j].Bx) + (M[i][j].By*M[i][j].By));
+				M[i][j].R = sqrt((M[i][j].Rx * M[i][j].Rx) + (M[i][j].Ry * M[i][j].Ry));
+				M[i][j].B = sqrt((M[i][j].Bx * M[i][j].Bx) + (M[i][j].By * M[i][j].By));
 			}
 		}
 
@@ -297,8 +299,8 @@ int main(int argc, char **argv) {
 		}
 
 		/*Laço para atualizar G*/
+		#pragma omp parallel for private(i, j, gx, gy, g, angle) num_threads(nr_proc) schedule(dynamic)
 		for (i = 1; i < lines - 1; i++) {
-			#pragma omp parallel for num_threads(nr_proc) schedule(dynamic)
 			for (j = 1; j < columns - 1; j++) {
 				gx = M[i][j].Rx + M[i][j].Bx;
 				gy = M[i][j].Ry + M[i][j].By;
