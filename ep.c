@@ -108,9 +108,9 @@ int main(int argc, char **argv) {
 	    M = M2;
 	    M2 = aux;
 
-	    cp(M2, M, lines, columns);
+	    cp(M2, M, lines, columns, nr_proc);
 
-		#pragma omp parallel firstprivate(lines, columns) private(i, j, val) num_threads(nr_proc) shared(M)
+		#pragma omp parallel firstprivate(lines, columns) private(i, j, val) num_threads(nr_proc) /*shared(M)*/
 		{
 		    int thread_num = omp_get_thread_num();
 		    int num_threads = omp_get_num_threads();
@@ -260,6 +260,7 @@ int main(int argc, char **argv) {
 		}
 
 		/*O bloco abaixo calcula as componentes R e B dos pixels*/
+		#pragma omp parallel for private(i, j) num_threads(nr_proc) schedule(dynamic)
 		for (i = 1; i < lines - 1; i++) {
 			for (j = 1; j < columns - 1; j++) {
 				M[i][j].R = sqrt((M[i][j].Rx * M[i][j].Rx) + (M[i][j].Ry * M[i][j].Ry));

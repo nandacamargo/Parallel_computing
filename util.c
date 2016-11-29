@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "util.h"
+#include <omp.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -33,10 +34,11 @@ int isBorder(int i, int j) {
         return FALSE;
 }
 
-void cp(Pixel **M, Pixel **M2, int lines, int columns) {
+void cp(Pixel **M, Pixel **M2, int lines, int columns, int nr_proc) {
 
 	int i, j;
-	
+
+	#pragma omp parallel for private(i, j) num_threads(nr_proc) schedule(dynamic)
 	for (i = 0; i < lines; i++) {
 		for (j = 0; j < columns; j++) {
 			M2[i][j].Rx = M[i][j].Rx;

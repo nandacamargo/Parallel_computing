@@ -18,6 +18,6 @@ double horizontal_component(double comp, double angle);
 double vertical_component(double comp, double angle);
 double transfer(double neighbor, double current);
 int isBorder(int i, int j);
-void cp(Pixel **M, Pixel **M2, int lines, int columns);
+void cp(Pixel **M, Pixel **M2, int lines, int columns, int nr_proc);
 
 #endif
