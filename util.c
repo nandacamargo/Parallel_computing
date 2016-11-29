@@ -41,9 +41,12 @@ void cp(Pixel **M, Pixel **M2, int lines, int columns) {
 		for (j = 0; j < columns; j++) {
 			M2[i][j].Rx = M[i][j].Rx;
 			M2[i][j].Ry = M[i][j].Ry;
+			M2[i][j].By = M[i][j].R;
 			M2[i][j].G = M[i][j].G;
+			M2[i][j].G = M[i][j].ang;
 			M2[i][j].Bx = M[i][j].Bx; 
-			M2[i][j].By = M[i][j].By; 
+			M2[i][j].By = M[i][j].By;
+			M2[i][j].By = M[i][j].B;
 		}
 		
 	}
