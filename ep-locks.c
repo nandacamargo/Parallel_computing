@@ -132,10 +132,10 @@ int main(int argc, char **argv) {
 
  			for (i = start; i < end; i++) {	/*Por causa da borda*/
 				
-				if (i == start && thread_num != 0) {
+				if (thread_num != 0 && i == start) {
 					omp_set_lock(&lock[thread_num - 1]); /* Id da thread anterior se estiver no começo do bloco */
 				}
-				else if (i == end - 1 && thread_num != num_threads - 1) {
+				else if (thread_num != num_threads - 1 && i == end - 1) {
 					omp_set_lock(&lock[thread_num]); /* Id da thread se estiver no final do bloco */
 				}
 
@@ -167,6 +167,7 @@ int main(int argc, char **argv) {
 						M[i-1][j].Ry += val;
 						M[i][j].Ry -= val;
 						
+						/*Recebe no sentido oposto*/
 						val = transfer(M2[i+1][j].B, M2[i][j].By);
 						M[i+1][j].By += val;
 						M[i][j].By -= val;
@@ -176,16 +177,17 @@ int main(int argc, char **argv) {
 						M[i+1][j].Ry -= val;
 						M[i][j].Ry += val;
 						
+						/*Recebe no sentido oposto*/
 						val = transfer(M2[i-1][j].B, M2[i][j].By);
 						M[i-1][j].By -= val;
 						M[i][j].By += val;
 					}
 				}
 
-				if (i == start && thread_num != 0) {
+				if (thread_num != 0 && i == start) {
 					omp_unset_lock(&lock[thread_num - 1]); /* Id da thread anterior se estiver no começo do bloco */
 				}
-				else if (i == end - 1 && thread_num != num_threads - 1) {
+				else if (thread_num != num_threads - 1 && i == end - 1) {
 					omp_unset_lock(&lock[thread_num]); /* Id da thread se estiver no final do bloco */
 				}
 
