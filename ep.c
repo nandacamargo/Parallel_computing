@@ -10,11 +10,11 @@
 #define FALSE 0
 #define DEBUG 1
 #define NMAX 1000
-#define MAX_LINE 256 /*Intervalo [0, 255]*/
-#define RGB_SIZE 256
+#define MAX_LINE 256
+#define RGB_SIZE 255
 #define PI 3.14159265359
 
-long int  x;
+long int x;
 
 int main(int argc, char **argv) {
 
@@ -340,8 +340,10 @@ int main(int argc, char **argv) {
 
 	for (i = 0; i < lines; i++) {
 		free(M[i]);
+		free(M2[i]);
 	}
 	free(M);
+	free(M2);
 
  	return 0;
 }
